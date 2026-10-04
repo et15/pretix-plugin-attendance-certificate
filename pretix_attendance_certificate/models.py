@@ -55,6 +55,9 @@ class AttendanceCertificateLayout(LoggedModel):
         null=True, blank=True, upload_to=bg_name, max_length=255
     )
 
+    def __str__(self):
+        return self.name
+
     class Meta:
         constraints = [
             models.CheckConstraint(

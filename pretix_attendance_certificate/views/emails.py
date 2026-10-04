@@ -76,6 +76,22 @@ class SendCertificateEmailView(BaseSenderView):
             kwargs["layout_id"] = form.cleaned_data["layout"].pk
         return kwargs
 
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        # Lets the "use this template's email text" button in our form
+        # fragment fill the subject/message fields client-side, without a
+        # round trip - keyed by locale index to match the subject_N/message_N
+        # field names the I18nFormField widget renders.
+        locales = self.request.event.settings.get("locales")
+        ctx["layout_mail_texts"] = {
+            layout.pk: {
+                "subject": [str(layout.mail_subject.localize(loc)) for loc in locales],
+                "message": [str(layout.mail_text.localize(loc)) for loc in locales],
+            }
+            for layout in available_layouts(self.request.event)
+        }
+        return ctx
+
     @classmethod
     def show_history_meta_data(cls, logentry, _cache_store):
         tpl = get_template(

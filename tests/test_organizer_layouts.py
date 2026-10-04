@@ -30,6 +30,38 @@ def _delete_url(event, layout):
     )
 
 
+def _editor_url(event, layout):
+    return reverse(
+        "plugins:pretix_attendance_certificate:edit",
+        kwargs={
+            "organizer": event.organizer.slug,
+            "event": event.slug,
+            "layout": layout.pk,
+        },
+    )
+
+
+@pytest.mark.django_db
+def test_list_links_to_editor_via_anchor_event(organizer_client, event, organizer_layout):
+    response = organizer_client.get(_list_url(event))
+    assert _editor_url(event, organizer_layout) in response.rendered_content
+
+
+@pytest.mark.django_db
+def test_list_shows_which_events_use_a_template(organizer_client, event, organizer_layout):
+    with scopes_disabled():
+        organizer_layout.active_events.add(event)
+    response = organizer_client.get(_list_url(event))
+    assert event.name in response.rendered_content
+    assert "Not used by any event yet" not in response.rendered_content
+
+
+@pytest.mark.django_db
+def test_list_shows_not_used_hint_when_inactive(organizer_client, event, organizer_layout):
+    response = organizer_client.get(_list_url(event))
+    assert "Not used by any event yet" in response.rendered_content
+
+
 @pytest.mark.django_db
 def test_list_requires_organizer_permission(client, event):
     with scopes_disabled():

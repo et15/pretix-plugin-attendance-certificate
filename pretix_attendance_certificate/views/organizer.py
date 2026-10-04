@@ -23,6 +23,25 @@ class OrganizerLayoutListView(OrganizerDetailViewMixin, OrganizerPermissionRequi
             event__isnull=True
         ).order_by("name")
 
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        # Editing a template's content always happens through the per-event
+        # editor (it needs a concrete event to anchor permissions/preview
+        # data on) - any event of this organizer that has the plugin enabled
+        # works equally well as that anchor.
+        ctx["anchor_event"] = (
+            self.request.organizer.events.filter(
+                plugins__icontains="pretix_attendance_certificate"
+            )
+            .order_by("date_from")
+            .first()
+        )
+        ctx["layouts"] = [
+            {"layout": layout, "active_events": list(layout.active_events.all())}
+            for layout in ctx["layouts"]
+        ]
+        return ctx
+
 
 class OrganizerLayoutCreateView(OrganizerDetailViewMixin, OrganizerPermissionRequiredMixin, CreateView):
     model = AttendanceCertificateLayout

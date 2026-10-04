@@ -173,3 +173,43 @@ def test_editing_organizer_layout_with_organizer_permission(
 ):
     response = organizer_client.get(_editor_url(event, organizer_layout))
     assert response.status_code == 200
+
+
+# --- placeholder help text -------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_event_template_form_lists_the_events_name_parts(logged_in_client, event, layout):
+    event.settings.name_scheme = "given_family"
+    url = reverse(
+        "plugins:pretix_attendance_certificate:layouts.update",
+        kwargs={"organizer": event.organizer.slug, "event": event.slug, "layout": layout.pk},
+    )
+    content = logged_in_client.get(url).rendered_content
+    for placeholder in ("{name}", "{name_for_salutation}", "{event}", "{code}", "{url}"):
+        assert placeholder in content
+    assert "{name_given_name}" in content and "{name_family_name}" in content
+    assert "registration questions" in content
+
+
+@pytest.mark.django_db
+def test_event_template_form_with_full_name_scheme(logged_in_client, event, layout):
+    event.settings.name_scheme = "full"
+    url = reverse(
+        "plugins:pretix_attendance_certificate:layouts.update",
+        kwargs={"organizer": event.organizer.slug, "event": event.slug, "layout": layout.pk},
+    )
+    content = logged_in_client.get(url).rendered_content
+    assert "{name_given_name}" not in content
+    assert "only collects a full name" in content
+
+
+@pytest.mark.django_db
+def test_organizer_template_form_gives_name_part_example(organizer_client, event, organizer_layout):
+    url = reverse(
+        "plugins:pretix_attendance_certificate:organizer.layouts.update",
+        kwargs={"organizer": event.organizer.slug, "layout": organizer_layout.pk},
+    )
+    content = organizer_client.get(url).rendered_content
+    assert "{name}" in content
+    assert "{name_given_name}" in content

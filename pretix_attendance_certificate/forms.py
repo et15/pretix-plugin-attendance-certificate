@@ -3,7 +3,11 @@ from django.utils.translation import gettext_lazy as _
 
 from pretix.plugins.sendmail.forms import FormPlaceholderMixin
 
-from pretix_attendance_certificate.models import AttendanceCertificateLayout
+from pretix_attendance_certificate.models import (
+    AttendanceCertificateLayout,
+    OrganizerSigningCertificate,
+)
+from pretix_attendance_certificate.signing import InvalidCertificate, load_pkcs12
 
 # Organizer-wide templates have no single event to ask which placeholders
 # exist, so they get a general note instead of the generated list.
@@ -51,3 +55,56 @@ class OrganizerLayoutForm(FormPlaceholderMixin, forms.ModelForm):
                 self._set_field_placeholders(
                     fname, ["event", "order", "position_or_address"]
                 )
+
+
+class SigningSettingsForm(forms.ModelForm):
+    class Meta:
+        model = OrganizerSigningCertificate
+        fields = ["enabled", "reason"]
+
+
+class GenerateCertificateForm(forms.Form):
+    common_name = forms.CharField(
+        max_length=64,
+        label=_("Name"),
+        help_text=_("Shown as the signer, e.g. the name of your organization."),
+    )
+    organization = forms.CharField(
+        max_length=64, required=False, label=_("Organization")
+    )
+    valid_years = forms.IntegerField(
+        min_value=1,
+        max_value=30,
+        initial=5,
+        label=_("Validity in years"),
+        help_text=_(
+            "Signed documents stay verifiable after expiry, but new "
+            "certificates can only be signed with a certificate you replace "
+            "in time."
+        ),
+    )
+
+
+class ImportCertificateForm(forms.Form):
+    pkcs12 = forms.FileField(
+        label=_("Certificate with private key (.p12 / .pfx)"),
+    )
+    password = forms.CharField(
+        required=False,
+        label=_("Password"),
+        widget=forms.PasswordInput(render_value=False),
+    )
+
+    def clean(self):
+        data = super().clean()
+        if self.errors:
+            return data
+        try:
+            data["pems"] = load_pkcs12(
+                data["pkcs12"].read(), data.get("password") or None
+            )
+        except InvalidCertificate:
+            raise forms.ValidationError(
+                _("The file could not be read. Check the file and the password.")
+            )
+        return data

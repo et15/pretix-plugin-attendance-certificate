@@ -2,7 +2,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: \n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2017-03-07 19:01+0100\n"
+"POT-Creation-Date: 2026-10-04 17:19-0500\n"
 "PO-Revision-Date: \n"
 "Last-Translator: Python Italia\n"
 "Language-Team: \n"
@@ -10,3 +10,431 @@ msgstr ""
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
+
+#: apps.py:16 views/emails.py:49
+msgid "Attendance Certificate"
+msgstr ""
+
+#: apps.py:18
+msgid "Create Attendance Certificates for your attendees"
+msgstr ""
+
+#: apps.py:30 models.py:47 views/editor.py:58
+msgid "Default"
+msgstr ""
+
+#: forms.py:11
+#, python-brace-format
+msgid ""
+"Placeholders: {event} (event name), {name} (attendee's full name), "
+"{name_for_salutation} (name as used in a salutation, e.g. \"Mr Doe\"), "
+"{code} (order code), {url} (link to the order page). Heads-up: "
+"{name_given_name} (first name) and {name_family_name} (last name) only exist "
+"for events that collect the name in parts. For any other event they are sent "
+"as literal text, so use {name} if the template is shared between events. "
+"Which further placeholders exist (e.g. event meta data) depends on the event."
+msgstr ""
+
+#: models.py:50
+#: templates/pretix_attendance_certificate/event_layout_list.html:69
+#: templates/pretix_attendance_certificate/event_layout_list.html:130
+#: templates/pretix_attendance_certificate/organizer_layout_list.html:20
+msgid "Name"
+msgstr ""
+
+#: models.py:62
+msgid "Email subject"
+msgstr ""
+
+#: models.py:67
+msgid "Email text"
+msgstr ""
+
+#: models.py:127
+msgid "Check-in list"
+msgstr ""
+
+#: models.py:129
+msgid ""
+"Only attendees checked in on this list are eligible for the template. Leave "
+"empty to make it available to everyone."
+msgstr ""
+
+#: models.py:136
+#: templates/pretix_attendance_certificate/event_layout_list.html:103
+msgid "Active"
+msgstr ""
+
+#: models.py:138
+msgid ""
+"Deactivated templates are not offered for this event. This is set "
+"automatically when the tied check-in list is deleted."
+msgstr ""
+
+#: render.py:59
+#: templates/pretix_attendance_certificate/control_order_position_buttons.html:12
+#: templates/pretix_attendance_certificate/control_order_position_buttons.html:17
+#: templates/pretix_attendance_certificate/presale_certificates.html:4
+msgid "Certificate of attendance"
+msgstr ""
+
+#: signals.py:42
+msgid "Certificate of Attendance"
+msgstr ""
+
+#: signals.py:54
+msgid "Templates"
+msgstr ""
+
+#: signals.py:66
+msgid "Send out certificates"
+msgstr ""
+
+#: signals.py:95
+msgid "Certificate templates"
+msgstr ""
+
+#: signals.py:282
+#, python-brace-format
+msgid ""
+"An email has been sent with the certificate of attendance to attendee "
+"\"{attendee_name}\""
+msgstr ""
+
+#: signals.py:290
+msgid "The layout of the certificate of attendance has been changed."
+msgstr ""
+
+#: signals.py:296
+msgid "A certificate of attendance template has been deleted."
+msgstr ""
+
+#: signals.py:303
+#, python-brace-format
+msgid ""
+"The certificate template \"{layout}\" was deactivated because its check-in "
+"list \"{checkin_list}\" was deleted."
+msgstr ""
+
+#: signals.py:311
+msgid "The certificate of attendance has been sent out to all attendees."
+msgstr ""
+
+#: templates/pretix_attendance_certificate/control_order_position_buttons.html:15
+#: templates/pretix_attendance_certificate/control_order_position_buttons.html:28
+#, python-format
+msgid "Not checked in on \"%(list)s\""
+msgstr ""
+
+#: templates/pretix_attendance_certificate/control_order_position_buttons.html:30
+msgid "Email certificate of attendance"
+msgstr ""
+
+#: templates/pretix_attendance_certificate/event_layout_delete.html:3
+#: templates/pretix_attendance_certificate/organizer_layout_delete.html:3
+msgid "Delete template"
+msgstr ""
+
+#: templates/pretix_attendance_certificate/event_layout_delete.html:5
+#: templates/pretix_attendance_certificate/organizer_layout_delete.html:5
+msgid "Delete template:"
+msgstr ""
+
+#: templates/pretix_attendance_certificate/event_layout_delete.html:9
+msgid "Are you sure you want to delete this template?"
+msgstr ""
+
+#: templates/pretix_attendance_certificate/event_layout_delete.html:16
+#: templates/pretix_attendance_certificate/organizer_layout_delete.html:17
+msgid "Cancel"
+msgstr ""
+
+#: templates/pretix_attendance_certificate/event_layout_delete.html:19
+#: templates/pretix_attendance_certificate/organizer_layout_delete.html:20
+msgid "Delete"
+msgstr ""
+
+#: templates/pretix_attendance_certificate/event_layout_edit.html:5
+#: templates/pretix_attendance_certificate/organizer_layout_edit.html:5
+msgid "Edit template"
+msgstr ""
+
+#: templates/pretix_attendance_certificate/event_layout_edit.html:5
+#: templates/pretix_attendance_certificate/event_layout_edit.html:10
+#: templates/pretix_attendance_certificate/organizer_layout_edit.html:5
+#: templates/pretix_attendance_certificate/organizer_layout_edit.html:10
+#: templates/pretix_attendance_certificate/organizer_layout_list.html:15
+msgid "Create a new template"
+msgstr ""
+
+#: templates/pretix_attendance_certificate/event_layout_edit.html:9
+#: templates/pretix_attendance_certificate/organizer_layout_edit.html:9
+#, python-format
+msgid "Edit template: %(name)s"
+msgstr ""
+
+#: templates/pretix_attendance_certificate/event_layout_edit.html:17
+#: templates/pretix_attendance_certificate/event_layout_list.html:55
+#: templates/pretix_attendance_certificate/organizer_layout_edit.html:17
+msgid "Save"
+msgstr ""
+
+#: templates/pretix_attendance_certificate/event_layout_list.html:3
+#: templates/pretix_attendance_certificate/event_layout_list.html:5
+#: templates/pretix_attendance_certificate/organizer_layout_list.html:3
+#: templates/pretix_attendance_certificate/organizer_layout_list.html:5
+msgid "Certificate of attendance templates"
+msgstr ""
+
+#: templates/pretix_attendance_certificate/event_layout_list.html:7
+msgid "Who gets which certificate"
+msgstr ""
+
+#: templates/pretix_attendance_certificate/event_layout_list.html:9
+msgid ""
+"Tie a template to a check-in list (for example \"Passed the course\") so "
+"only attendees checked in on that list are eligible for it. Attendees can be "
+"eligible for several templates."
+msgstr ""
+
+#: templates/pretix_attendance_certificate/event_layout_list.html:21
+#: views/emails.py:30
+msgid "Template"
+msgstr ""
+
+#: templates/pretix_attendance_certificate/event_layout_list.html:22
+msgid "Only for attendees checked in on"
+msgstr ""
+
+#: templates/pretix_attendance_certificate/event_layout_list.html:31
+msgid "Everyone"
+msgstr ""
+
+#: templates/pretix_attendance_certificate/event_layout_list.html:40
+msgid "No templates are available for this event yet."
+msgstr ""
+
+#: templates/pretix_attendance_certificate/event_layout_list.html:48
+msgid "Let attendees download their certificate from their order page"
+msgstr ""
+
+#: templates/pretix_attendance_certificate/event_layout_list.html:51
+msgid ""
+"Only for paid orders, after the event is over, and only for attendees who "
+"were checked in on any check-in list. Templates tied to a check-in list "
+"additionally need a check-in on that list."
+msgstr ""
+
+#: templates/pretix_attendance_certificate/event_layout_list.html:59
+msgid "Organizer-wide templates"
+msgstr ""
+
+#: templates/pretix_attendance_certificate/event_layout_list.html:61
+msgid ""
+"These templates are managed centrally for your whole organizer. Activate the "
+"ones you want to use for this event."
+msgstr ""
+
+#: templates/pretix_attendance_certificate/event_layout_list.html:70
+msgid "Used for this event"
+msgstr ""
+
+#: templates/pretix_attendance_certificate/event_layout_list.html:93
+msgid "Active - click to deactivate"
+msgstr ""
+
+#: templates/pretix_attendance_certificate/event_layout_list.html:97
+msgid "Inactive - click to activate"
+msgstr ""
+
+#: templates/pretix_attendance_certificate/event_layout_list.html:105
+msgid "Inactive"
+msgstr ""
+
+#: templates/pretix_attendance_certificate/event_layout_list.html:113
+msgid "Your organizer has not created any templates yet."
+msgstr ""
+
+#: templates/pretix_attendance_certificate/event_layout_list.html:119
+msgid "Templates for this event only"
+msgstr ""
+
+#: templates/pretix_attendance_certificate/event_layout_list.html:124
+msgid "Create a new template for this event"
+msgstr ""
+
+#: templates/pretix_attendance_certificate/event_layout_list.html:144
+msgid "Deactivated"
+msgstr ""
+
+#: templates/pretix_attendance_certificate/event_layout_list.html:153
+msgid "Deactivate"
+msgstr ""
+
+#: templates/pretix_attendance_certificate/event_layout_list.html:156
+msgid "Make sure the template is tied to the right check-in list afterwards."
+msgstr ""
+
+#: templates/pretix_attendance_certificate/event_layout_list.html:157
+msgid "Reactivate"
+msgstr ""
+
+#: templates/pretix_attendance_certificate/event_layout_list.html:162
+#: templates/pretix_attendance_certificate/organizer_layout_list.html:45
+msgid "Edit layout"
+msgstr ""
+
+#: templates/pretix_attendance_certificate/event_layout_list.html:164
+#: templates/pretix_attendance_certificate/organizer_layout_list.html:48
+msgid "Edit name and email text"
+msgstr ""
+
+#: templates/pretix_attendance_certificate/event_layout_list.html:173
+msgid "You haven't created any event-specific templates yet."
+msgstr ""
+
+#: templates/pretix_attendance_certificate/history_fragment_attendance_certificate.html:2
+msgid "Sent to attendees"
+msgstr ""
+
+#: templates/pretix_attendance_certificate/organizer_layout_delete.html:9
+msgid ""
+"Are you sure you want to delete this template? It will no longer be "
+"available for any event, even if it is currently activated there."
+msgstr ""
+
+#: templates/pretix_attendance_certificate/organizer_layout_list.html:7
+msgid ""
+"These templates are available to all events of this organizer. Each event "
+"can choose which of them to use in addition to its own event-specific "
+"templates."
+msgstr ""
+
+#: templates/pretix_attendance_certificate/organizer_layout_list.html:21
+msgid "Used in events"
+msgstr ""
+
+#: templates/pretix_attendance_certificate/organizer_layout_list.html:39
+msgid "Not used by any event yet"
+msgstr ""
+
+#: templates/pretix_attendance_certificate/organizer_layout_list.html:55
+msgid "You haven't created any organizer-wide templates yet."
+msgstr ""
+
+#: templates/pretix_attendance_certificate/organizer_layout_list.html:62
+msgid ""
+"No event of this organizer has the attendance certificate plugin enabled "
+"yet, so the visual layout cannot be edited here until one does (name and "
+"email text can still be edited regardless)."
+msgstr ""
+
+#: templates/pretix_attendance_certificate/presale_certificates.html:15
+msgid "Download certificate of attendance"
+msgstr ""
+
+#: templates/pretix_attendance_certificate/send_form_fragment_attendance_certificate.html:3
+msgid ""
+"This email will be sent to all attendees with an admission ticket. If the "
+"template is tied to a check-in list, only to those checked in on that list."
+msgstr ""
+
+#: templates/pretix_attendance_certificate/send_form_fragment_attendance_certificate.html:10
+msgid "Use this template's email text"
+msgstr ""
+
+#: templates/pretix_attendance_certificate/send_form_fragment_attendance_certificate.html:13
+msgid ""
+"Fills the subject/text below from the selected template - you can still edit "
+"them afterwards."
+msgstr ""
+
+#: views/editor.py:45 views/event_templates.py:76
+msgid "You do not have permission to view this content."
+msgstr ""
+
+#: views/editor.py:138
+msgid "Attendance Certificate layout"
+msgstr ""
+
+#: views/emails.py:33
+msgid ""
+"Multiple templates are available for this event - choose which one to send "
+"out. Templates tied to a check-in list only go to attendees checked in on "
+"that list."
+msgstr ""
+
+#: views/emails.py:50
+msgid "Send out the attendance certificates to attendees."
+msgstr ""
+
+#: views/emails.py:101
+#, python-format
+msgid "%(number)s matching ticket"
+msgid_plural "%(number)s matching tickets"
+msgstr[0] ""
+msgstr[1] ""
+
+#: views/event_templates.py:105
+#, python-brace-format
+msgid "The template \"{name}\" is now available for this event."
+msgstr ""
+
+#: views/event_templates.py:112
+#, python-brace-format
+msgid "The template \"{name}\" is no longer available for this event."
+msgstr ""
+
+#: views/event_templates.py:140 views/event_templates.py:188
+#: views/event_templates.py:227 views/organizer.py:82 views/organizer.py:123
+msgid "Your changes could not be saved."
+msgstr ""
+
+#: views/event_templates.py:148 views/event_templates.py:216
+#: views/organizer.py:112
+msgid "Your changes have been saved."
+msgstr ""
+
+#: views/event_templates.py:178 views/organizer.py:72
+msgid "The template has been created."
+msgstr ""
+
+#: views/event_templates.py:260 views/organizer.py:153
+msgid "The template has been deleted."
+msgstr ""
+
+#: views/positions.py:50
+msgid "The requested template is not available for this event."
+msgstr ""
+
+#: views/positions.py:53
+#, python-brace-format
+msgid ""
+"This attendee is not eligible for the template \"{name}\" (not checked in on "
+"list \"{checkin_list}\")."
+msgstr ""
+
+#: views/positions.py:59
+msgid ""
+"No certificate of attendance layout has been configured for this event yet."
+msgstr ""
+
+#: views/positions.py:65
+msgid ""
+"This attendee is not eligible for any certificate of attendance template."
+msgstr ""
+
+#: views/positions.py:70
+msgid ""
+"Multiple templates are available for this attendee - please pick one from "
+"the list."
+msgstr ""
+
+#: views/positions.py:111
+msgid "This attendee has no email address to send the certificate to."
+msgstr ""
+
+#: views/positions.py:132
+#, python-brace-format
+msgid "The certificate of attendance is being sent to {recipient}."
+msgstr ""

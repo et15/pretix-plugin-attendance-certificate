@@ -188,7 +188,9 @@ def test_event_template_form_lists_the_events_name_parts(logged_in_client, event
     content = logged_in_client.get(url).rendered_content
     for placeholder in ("{name}", "{name_for_salutation}", "{event}", "{code}", "{url}"):
         assert placeholder in content
-    assert "{name_given_name}" in content and "{name_family_name}" in content
+    assert "{name_given_name} (first name)" in content
+    assert "{name_family_name} (last name)" in content
+    assert "literal text" not in content
     assert "registration questions" in content
 
 
@@ -200,8 +202,10 @@ def test_event_template_form_with_full_name_scheme(logged_in_client, event, layo
         kwargs={"organizer": event.organizer.slug, "event": event.slug, "layout": layout.pk},
     )
     content = logged_in_client.get(url).rendered_content
-    assert "{name_given_name}" not in content
-    assert "only collects a full name" in content
+    # Still named, but with the heads-up that it is not available here.
+    assert "{name_given_name} (first name) is not available here" in content
+    assert "literal text" in content
+    assert "Name parts of this event" not in content
 
 
 @pytest.mark.django_db
@@ -212,4 +216,6 @@ def test_organizer_template_form_gives_name_part_example(organizer_client, event
     )
     content = organizer_client.get(url).rendered_content
     assert "{name}" in content
-    assert "{name_given_name}" in content
+    assert "{name_given_name} (first name)" in content
+    assert "only exist for events that collect the name in parts" in content
+    assert "literal text" in content

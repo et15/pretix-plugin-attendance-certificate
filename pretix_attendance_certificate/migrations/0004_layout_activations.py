@@ -38,7 +38,6 @@ class Migration(migrations.Migration):
             name="LayoutActivation",
             fields=[
                 ("id", models.AutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
-                ("position", models.PositiveIntegerField(default=0)),
                 (
                     "checkin_list",
                     models.ForeignKey(

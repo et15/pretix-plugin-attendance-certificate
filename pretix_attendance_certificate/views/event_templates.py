@@ -42,12 +42,11 @@ class EventLayoutListView(EventPermissionRequiredMixin, TemplateView):
             a.layout_id: a for a in LayoutActivation.objects.filter(event=event)
         }
         # Available templates (own + activated organizer-wide), ranked, with
-        # their per-event settings - edited together in one form.
+        # their check-in list - edited together in one form.
         ctx["assignments"] = [
             {
                 "layout": layout,
                 "checkin_list_id": getattr(activations.get(layout.pk), "checkin_list_id", None),
-                "position": getattr(activations.get(layout.pk), "position", 0),
             }
             for layout in available_layouts(event)
         ]
@@ -106,8 +105,8 @@ class EventLayoutToggleView(EventPermissionRequiredMixin, TemplateView):
 
 
 class EventLayoutAssignView(EventPermissionRequiredMixin, TemplateView):
-    """Saves, for every available template, the check-in list it is tied to
-    and its priority, plus the self-service switch."""
+    """Saves, for every available template, the check-in list it is tied to,
+    plus the self-service switch."""
 
     permission = ("can_change_event_settings", "can_view_orders")
 
@@ -120,15 +119,10 @@ class EventLayoutAssignView(EventPermissionRequiredMixin, TemplateView):
             if raw_list and raw_list not in lists:
                 messages.error(request, _("Your changes could not be saved."))
                 return redirect(self._back())
-            try:
-                position = max(0, int(request.POST.get("position_%d" % layout.pk) or 0))
-            except ValueError:
-                messages.error(request, _("Your changes could not be saved."))
-                return redirect(self._back())
             LayoutActivation.objects.update_or_create(
                 layout=layout,
                 event=event,
-                defaults={"checkin_list": lists.get(raw_list), "position": position},
+                defaults={"checkin_list": lists.get(raw_list)},
             )
         event.settings.set(SELF_SERVICE_SETTING, bool(request.POST.get("self_service")))
         messages.success(request, _("Your changes have been saved."))

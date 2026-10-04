@@ -8,7 +8,7 @@ from django.views import View
 from pretix.base.models import OrderPosition
 from pretix.control.permissions import EventPermissionRequiredMixin
 
-from pretix_attendance_certificate.models import certificate_options, primary_option
+from pretix_attendance_certificate.models import certificate_options
 from pretix_attendance_certificate.render import render_certificate
 from pretix_attendance_certificate.tasks import send_certificate_of_attendance_mails
 
@@ -36,10 +36,10 @@ def resolve_requested_layout(request, position):
 
     Returns (layout, error_message), of which exactly one is not None: an
     explicit ?layout=<pk>/POST layout param is honored if the attendee is
-    eligible for it, otherwise the attendee's primary certificate (highest
-    ranked eligible template) is used. Anything else is an error that the
-    caller should show to the user - so a certificate for a template the
-    attendee isn't eligible for can never be issued by accident.
+    eligible for it, otherwise the attendee's only eligible template is used.
+    Anything else is an error that the caller should show to the user - so a
+    certificate for a template the attendee isn't eligible for can never be
+    issued by accident.
     """
     options = certificate_options(position)
     layout_pk = request.GET.get("layout") or request.POST.get("layout")
@@ -51,7 +51,7 @@ def resolve_requested_layout(request, position):
         if not option.applicable:
             return None, _(
                 'This attendee is not eligible for the template "{name}" '
-                "(not checked in on list \"{checkin_list}\")."
+                '(not checked in on list "{checkin_list}").'
             ).format(name=option.layout.name, checkin_list=option.checkin_list)
         return option.layout, None
     if not options:
@@ -59,13 +59,18 @@ def resolve_requested_layout(request, position):
             "No certificate of attendance layout has been configured "
             "for this event yet."
         )
-    primary = primary_option(options)
-    if primary is None:
+    eligible = [o for o in options if o.applicable]
+    if not eligible:
         return None, _(
             "This attendee is not eligible for any certificate of attendance "
             "template."
         )
-    return primary.layout, None
+    if len(eligible) > 1:
+        return None, _(
+            "Multiple templates are available for this attendee - please pick "
+            "one from the list."
+        )
+    return eligible[0].layout, None
 
 
 class DownloadCertificateView(EventPermissionRequiredMixin, View):

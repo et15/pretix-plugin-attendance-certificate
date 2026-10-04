@@ -21,6 +21,7 @@ class EventLayoutFormMixin:
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
         kwargs["locales"] = self.request.event.settings.get("locales")
+        kwargs["event"] = self.request.event
         return kwargs
 
 

@@ -178,38 +178,52 @@ def test_editing_organizer_layout_with_organizer_permission(
 # --- placeholder help text -------------------------------------------------
 
 
-@pytest.mark.django_db
-def test_event_template_form_lists_the_events_name_parts(logged_in_client, event, layout):
-    event.settings.name_scheme = "given_family"
-    url = reverse(
+def _update_url(event, layout):
+    return reverse(
         "plugins:pretix_attendance_certificate:layouts.update",
         kwargs={"organizer": event.organizer.slug, "event": event.slug, "layout": layout.pk},
     )
-    content = logged_in_client.get(url).rendered_content
-    for placeholder in ("{name}", "{name_for_salutation}", "{event}", "{code}", "{url}"):
-        assert placeholder in content
-    assert "{name_given_name} (first name)" in content
-    assert "{name_family_name} (last name)" in content
+
+
+@pytest.mark.django_db
+def test_event_template_help_matches_the_send_page_list(logged_in_client, event, layout):
+    from pretix.base.email import get_available_placeholders
+
+    event.settings.name_scheme = "given_family"
+    with scopes_disabled():
+        expected = sorted(
+            get_available_placeholders(event, ["event", "order", "position_or_address"])
+        )
+    content = logged_in_client.get(_update_url(event, layout)).rendered_content
+    assert "Available placeholders:" in content
+    for key in expected:
+        assert "{%s}" % key in content
+    assert "{name_given_name} their first name" in content
     assert "literal text" not in content
     assert "registration questions" in content
 
 
 @pytest.mark.django_db
-def test_event_template_form_with_full_name_scheme(logged_in_client, event, layout):
-    event.settings.name_scheme = "full"
-    url = reverse(
-        "plugins:pretix_attendance_certificate:layouts.update",
-        kwargs={"organizer": event.organizer.slug, "event": event.slug, "layout": layout.pk},
-    )
-    content = logged_in_client.get(url).rendered_content
-    # Still named, but with the heads-up that it is not available here.
-    assert "{name_given_name} (first name) is not available here" in content
-    assert "literal text" in content
-    assert "Name parts of this event" not in content
+def test_event_template_help_includes_event_meta_data(logged_in_client, event, layout):
+    from pretix.base.models.event import EventMetaProperty
+
+    with scopes_disabled():
+        EventMetaProperty.objects.create(organizer=event.organizer, name="Kurs", default="x")
+    content = logged_in_client.get(_update_url(event, layout)).rendered_content
+    assert "{meta_Kurs}" in content
 
 
 @pytest.mark.django_db
-def test_organizer_template_form_gives_name_part_example(organizer_client, event, organizer_layout):
+def test_event_template_help_with_full_name_scheme(logged_in_client, event, layout):
+    event.settings.name_scheme = "full"
+    content = logged_in_client.get(_update_url(event, layout)).rendered_content
+    assert "{name}" in content
+    assert "{name_given_name} (first name) is not available" in content
+    assert "literal text" in content
+
+
+@pytest.mark.django_db
+def test_organizer_template_form_gives_general_heads_up(organizer_client, event, organizer_layout):
     url = reverse(
         "plugins:pretix_attendance_certificate:organizer.layouts.update",
         kwargs={"organizer": event.organizer.slug, "layout": organizer_layout.pk},

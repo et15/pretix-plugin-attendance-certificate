@@ -3,13 +3,20 @@ from django.core.exceptions import PermissionDenied
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
-from django.views.generic import CreateView, TemplateView
+from django.views.generic import CreateView, TemplateView, UpdateView
 
 from pretix.control.permissions import EventPermissionRequiredMixin
 from pretix.helpers.compat import CompatDeleteView
 
 from pretix_attendance_certificate.forms import OrganizerLayoutForm
 from pretix_attendance_certificate.models import AttendanceCertificateLayout
+
+
+class EventLayoutFormMixin:
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["locales"] = self.request.event.settings.get("locales")
+        return kwargs
 
 
 class EventLayoutListView(EventPermissionRequiredMixin, TemplateView):
@@ -76,7 +83,7 @@ class EventLayoutToggleView(EventPermissionRequiredMixin, TemplateView):
         )
 
 
-class EventLayoutCreateView(EventPermissionRequiredMixin, CreateView):
+class EventLayoutCreateView(EventLayoutFormMixin, EventPermissionRequiredMixin, CreateView):
     model = AttendanceCertificateLayout
     template_name = "pretix_attendance_certificate/event_layout_edit.html"
     permission = "can_change_event_settings"
@@ -100,6 +107,45 @@ class EventLayoutCreateView(EventPermissionRequiredMixin, CreateView):
             user=self.request.user,
             data={"name": form.instance.name},
         )
+        return ret
+
+    def form_invalid(self, form):
+        messages.error(self.request, _("Your changes could not be saved."))
+        return super().form_invalid(form)
+
+
+class EventLayoutUpdateView(EventLayoutFormMixin, EventPermissionRequiredMixin, UpdateView):
+    model = AttendanceCertificateLayout
+    template_name = "pretix_attendance_certificate/event_layout_edit.html"
+    permission = "can_change_event_settings"
+    form_class = OrganizerLayoutForm
+    context_object_name = "layout"
+
+    def get_object(self, queryset=None):
+        return get_object_or_404(
+            AttendanceCertificateLayout,
+            event=self.request.event,
+            pk=self.kwargs.get("layout"),
+        )
+
+    def get_success_url(self):
+        return reverse(
+            "plugins:pretix_attendance_certificate:layouts",
+            kwargs={
+                "organizer": self.request.event.organizer.slug,
+                "event": self.request.event.slug,
+            },
+        )
+
+    def form_valid(self, form):
+        messages.success(self.request, _("Your changes have been saved."))
+        ret = super().form_valid(form)
+        if form.has_changed():
+            form.instance.log_action(
+                "pretix.plugins.pretix_attendance_certificate.layout.changed",
+                user=self.request.user,
+                data={k: str(form.cleaned_data.get(k)) for k in form.changed_data},
+            )
         return ret
 
     def form_invalid(self, form):

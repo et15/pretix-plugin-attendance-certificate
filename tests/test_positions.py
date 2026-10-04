@@ -113,6 +113,23 @@ def test_send_certificate_email(logged_in_client, event, order, pos, layout):
 
 
 @pytest.mark.django_db
+def test_send_certificate_uses_the_layouts_own_mail_text(
+    logged_in_client, event, order, pos, layout
+):
+    with scopes_disabled():
+        layout.mail_subject = "Custom subject for {event}"
+        layout.mail_text = "Custom body text"
+        layout.save()
+
+    djmail.outbox = []
+    response = logged_in_client.post(_send_url(event, pos))
+    assert response.status_code == 302
+    assert len(djmail.outbox) == 1
+    assert djmail.outbox[0].subject == "Custom subject for Dummy"
+    assert "Custom body text" in djmail.outbox[0].body
+
+
+@pytest.mark.django_db
 def test_send_certificate_falls_back_to_order_email(
     logged_in_client, event, order, pos, layout
 ):

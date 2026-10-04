@@ -30,6 +30,13 @@ def _delete_url(event, layout):
     )
 
 
+def _update_url(event, layout):
+    return reverse(
+        "plugins:pretix_attendance_certificate:organizer.layouts.update",
+        kwargs={"organizer": event.organizer.slug, "layout": layout.pk},
+    )
+
+
 def _editor_url(event, layout):
     return reverse(
         "plugins:pretix_attendance_certificate:edit",
@@ -97,6 +104,47 @@ def test_create_organizer_layout(organizer_client, event):
             organizer=event.organizer, name="Kompetenznachweis"
         )
         assert created.event_id is None
+
+
+@pytest.mark.django_db
+def test_update_organizer_layout_name_and_mail_text(
+    organizer_client, event, organizer_layout
+):
+    response = organizer_client.post(
+        _update_url(event, organizer_layout),
+        {
+            "name": "Renamed template",
+            "mail_subject_0": "New subject",
+            "mail_text_0": "New body",
+        },
+    )
+    assert response.status_code == 302
+    with scopes_disabled():
+        organizer_layout.refresh_from_db()
+        assert organizer_layout.name == "Renamed template"
+        assert str(organizer_layout.mail_subject) == "New subject"
+        assert str(organizer_layout.mail_text) == "New body"
+
+
+@pytest.mark.django_db
+def test_update_organizer_layout_requires_permission(client, event, organizer_layout):
+    with scopes_disabled():
+        user = User.objects.create_user("noperm2@dummy.dummy", "noperm2")
+        Team.objects.create(organizer=event.organizer).members.add(user)
+    client.force_login(user)
+    response = client.post(
+        _update_url(event, organizer_layout), {"name": "Hijacked"}
+    )
+    assert response.status_code != 200
+    with scopes_disabled():
+        organizer_layout.refresh_from_db()
+        assert organizer_layout.name != "Hijacked"
+
+
+@pytest.mark.django_db
+def test_list_links_name_to_update_view(organizer_client, event, organizer_layout):
+    response = organizer_client.get(_list_url(event))
+    assert _update_url(event, organizer_layout) in response.rendered_content
 
 
 @pytest.mark.django_db

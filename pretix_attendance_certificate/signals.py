@@ -1,41 +1,18 @@
-from django.utils.translation import gettext_lazy as _, gettext_noop
+from django.utils.translation import gettext_lazy as _
 from django.urls import resolve, reverse
 from django.dispatch import receiver
 from django.template.loader import get_template
 from django.utils.safestring import mark_safe
-from i18nfield.strings import LazyI18nString
 from pretix_attendance_certificate.views.emails import SendCertificateEmailView
 from pretix.control.signals import (
     nav_event,
-    nav_event_settings,
     nav_organizer,
     order_position_buttons,
 )
 from pretix.plugins.sendmail.signals import sendmail_view_classes
 from pretix.base.signals import logentry_display
 from pretix.base.models import OrderPosition
-from pretix.base.settings import settings_hierarkey
 from pretix_attendance_certificate.models import available_layouts
-
-settings_hierarkey.add_default(
-    "pretix_attendance_certificate_mail_subject",
-    default_type=LazyI18nString,
-    value=LazyI18nString.from_gettext(
-        gettext_noop("[{event}] Your certificate of attendance")
-    ),
-)
-settings_hierarkey.add_default(
-    "pretix_attendance_certificate_mail_text",
-    default_type=LazyI18nString,
-    value=LazyI18nString.from_gettext(
-        gettext_noop(
-            "Hello,\n\n"
-            "please find your certificate of attendance for {event} attached to "
-            "this email.\n\n"
-            "Best regards"
-        )
-    ),
-)
 
 
 @receiver(nav_event, dispatch_uid="certificate_of_attendance_nav")
@@ -111,29 +88,6 @@ def control_nav_organizer_import(sender, request=None, organizer=None, **kwargs)
             "icon": "id-card",
             "active": url.namespace == "plugins:pretix_attendance_certificate"
             and url.url_name.startswith("organizer.layouts"),
-        }
-    ]
-
-
-@receiver(nav_event_settings, dispatch_uid="certificate_of_attendance_nav_settings")
-def control_nav_event_settings(sender, request=None, **kwargs):
-    if not request.user.has_event_permission(
-        request.organizer, request.event, "can_change_event_settings", request=request
-    ):
-        return []
-    url = resolve(request.path_info)
-    return [
-        {
-            "label": _("Certificate of Attendance"),
-            "url": reverse(
-                "plugins:pretix_attendance_certificate:mail_settings",
-                kwargs={
-                    "event": request.event.slug,
-                    "organizer": request.event.organizer.slug,
-                },
-            ),
-            "active": url.namespace == "plugins:pretix_attendance_certificate"
-            and url.url_name == "mail_settings",
         }
     ]
 

@@ -4,7 +4,6 @@ from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
 from django.views import View
-from i18nfield.strings import LazyI18nString
 
 from pretix.base.models import OrderPosition
 from pretix.control.permissions import EventPermissionRequiredMixin
@@ -107,25 +106,12 @@ class SendCertificateView(EventPermissionRequiredMixin, View):
             messages.error(request, error)
             return redirect(_order_url(request, order))
 
-        # Eagerly resolve into a plain {locale: str} dict for every configured
-        # locale - the raw .data of a settings-default LazyI18nString can be
-        # a lazy gettext proxy, which Celery/JSON can't serialize.
-        subject_setting = request.event.settings.get(
-            "pretix_attendance_certificate_mail_subject", as_type=LazyI18nString
-        )
-        message_setting = request.event.settings.get(
-            "pretix_attendance_certificate_mail_text", as_type=LazyI18nString
-        )
-        locales = request.event.settings.get("locales")
-        subject = {locale: str(subject_setting.localize(locale)) for locale in locales}
-        message = {locale: str(message_setting.localize(locale)) for locale in locales}
-
         send_certificate_of_attendance_mails.apply_async(
             kwargs={
                 "event": request.event.pk,
                 "user": request.user.pk,
-                "subject": subject,
-                "message": message,
+                "subject": layout.mail_subject.data,
+                "message": layout.mail_text.data,
                 "objects": [position.pk],
                 "layout_id": layout.pk,
             }

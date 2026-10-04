@@ -1,6 +1,7 @@
 from django.db import models
 from django.db.models import Q
 from django.utils.crypto import get_random_string
+from i18nfield.fields import I18nCharField, I18nTextField
 import string
 
 from pretix.base.models import LoggedModel
@@ -53,6 +54,20 @@ class AttendanceCertificateLayout(LoggedModel):
     )
     background = models.FileField(
         null=True, blank=True, upload_to=bg_name, max_length=255
+    )
+    mail_subject = I18nCharField(
+        verbose_name=_("Email subject"),
+        max_length=255,
+        default="[{event}] Your certificate of attendance",
+    )
+    mail_text = I18nTextField(
+        verbose_name=_("Email text"),
+        default=(
+            "Hello,\n\n"
+            "please find your certificate of attendance for {event} attached to "
+            "this email.\n\n"
+            "Best regards"
+        ),
     )
 
     def __str__(self):

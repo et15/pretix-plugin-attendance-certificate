@@ -24,7 +24,7 @@
             <tr>
                 <td>
                     {% if can_edit_organizer_layouts %}
-                        <a href="{% url "plugins:pretix_attendance_certificate:edit" organizer=request.event.organizer.slug event=request.event.slug layout=row.layout.pk %}">
+                        <a href="{% url "plugins:pretix_attendance_certificate:organizer.layouts.update" organizer=request.event.organizer.slug layout=row.layout.pk %}">
                             {{ row.layout.name }}
                         </a>
                     {% else %}
@@ -83,14 +83,16 @@
         {% for l in event_layouts %}
             <tr>
                 <td><strong>
-                    <a href="{% url "plugins:pretix_attendance_certificate:edit" organizer=request.event.organizer.slug event=request.event.slug layout=l.pk %}">
+                    <a href="{% url "plugins:pretix_attendance_certificate:layouts.update" organizer=request.event.organizer.slug event=request.event.slug layout=l.pk %}">
                         {{ l.name }}
                     </a>
                 </strong></td>
                 <td class="text-right flip">
                     {% if "can_change_event_settings" in request.eventpermset %}
                         <a href="{% url "plugins:pretix_attendance_certificate:edit" organizer=request.event.organizer.slug event=request.event.slug layout=l.pk %}"
-                                class="btn btn-default btn-sm"><i class="fa fa-edit"></i></a>
+                                class="btn btn-default btn-sm" title="{% trans "Edit layout" %}" data-toggle="tooltip"><i class="fa fa-id-card"></i></a>
+                        <a href="{% url "plugins:pretix_attendance_certificate:layouts.update" organizer=request.event.organizer.slug event=request.event.slug layout=l.pk %}"
+                                class="btn btn-default btn-sm" title="{% trans "Edit name and email text" %}" data-toggle="tooltip"><i class="fa fa-edit"></i></a>
                         <a href="{% url "plugins:pretix_attendance_certificate:layouts.delete" organizer=request.event.organizer.slug event=request.event.slug layout=l.pk %}"
                                 class="btn btn-danger btn-sm"><i class="fa fa-trash"></i></a>
                     {% endif %}

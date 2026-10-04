@@ -6,12 +6,13 @@ from .views.event_templates import (
     EventLayoutDeleteView,
     EventLayoutListView,
     EventLayoutToggleView,
+    EventLayoutUpdateView,
 )
-from .views.mail_settings import CertificateMailSettingsView
 from .views.organizer import (
     OrganizerLayoutCreateView,
     OrganizerLayoutDeleteView,
     OrganizerLayoutListView,
+    OrganizerLayoutUpdateView,
 )
 from .views.positions import DownloadCertificateView, SendCertificateView
 
@@ -37,14 +38,14 @@ urlpatterns = [
         name="layouts.delete",
     ),
     re_path(
+        r"^control/event/(?P<organizer>[^/]+)/(?P<event>[^/]+)/attendance-certificate/templates/(?P<layout>\d+)/edit$",
+        EventLayoutUpdateView.as_view(),
+        name="layouts.update",
+    ),
+    re_path(
         r"^control/event/(?P<organizer>[^/]+)/(?P<event>[^/]+)/attendance-certificate/templates/(?P<layout>\d+)/toggle$",
         EventLayoutToggleView.as_view(),
         name="layouts.toggle",
-    ),
-    re_path(
-        r"^control/event/(?P<organizer>[^/]+)/(?P<event>[^/]+)/attendance-certificate/mail-settings$",
-        CertificateMailSettingsView.as_view(),
-        name="mail_settings",
     ),
     re_path(
         r"^control/organizer/(?P<organizer>[^/]+)/attendance-certificate/templates/$",
@@ -55,6 +56,11 @@ urlpatterns = [
         r"^control/organizer/(?P<organizer>[^/]+)/attendance-certificate/templates/add$",
         OrganizerLayoutCreateView.as_view(),
         name="organizer.layouts.add",
+    ),
+    re_path(
+        r"^control/organizer/(?P<organizer>[^/]+)/attendance-certificate/templates/(?P<layout>\d+)/edit$",
+        OrganizerLayoutUpdateView.as_view(),
+        name="organizer.layouts.update",
     ),
     re_path(
         r"^control/organizer/(?P<organizer>[^/]+)/attendance-certificate/templates/(?P<layout>\d+)/delete$",

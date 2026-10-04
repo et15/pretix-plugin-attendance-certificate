@@ -2,7 +2,7 @@ from django.contrib import messages
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
-from django.views.generic import CreateView, ListView
+from django.views.generic import CreateView, ListView, UpdateView
 
 from pretix.control.permissions import OrganizerPermissionRequiredMixin
 from pretix.control.views.organizer import OrganizerDetailViewMixin
@@ -10,6 +10,13 @@ from pretix.helpers.compat import CompatDeleteView
 
 from pretix_attendance_certificate.forms import OrganizerLayoutForm
 from pretix_attendance_certificate.models import AttendanceCertificateLayout
+
+
+class OrganizerLayoutFormMixin:
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["locales"] = self.request.organizer.settings.get("locales")
+        return kwargs
 
 
 class OrganizerLayoutListView(OrganizerDetailViewMixin, OrganizerPermissionRequiredMixin, ListView):
@@ -43,7 +50,12 @@ class OrganizerLayoutListView(OrganizerDetailViewMixin, OrganizerPermissionRequi
         return ctx
 
 
-class OrganizerLayoutCreateView(OrganizerDetailViewMixin, OrganizerPermissionRequiredMixin, CreateView):
+class OrganizerLayoutCreateView(
+    OrganizerLayoutFormMixin,
+    OrganizerDetailViewMixin,
+    OrganizerPermissionRequiredMixin,
+    CreateView,
+):
     model = AttendanceCertificateLayout
     template_name = "pretix_attendance_certificate/organizer_layout_edit.html"
     permission = "can_change_organizer_settings"
@@ -64,6 +76,47 @@ class OrganizerLayoutCreateView(OrganizerDetailViewMixin, OrganizerPermissionReq
             user=self.request.user,
             data={"name": form.instance.name},
         )
+        return ret
+
+    def form_invalid(self, form):
+        messages.error(self.request, _("Your changes could not be saved."))
+        return super().form_invalid(form)
+
+
+class OrganizerLayoutUpdateView(
+    OrganizerLayoutFormMixin,
+    OrganizerDetailViewMixin,
+    OrganizerPermissionRequiredMixin,
+    UpdateView,
+):
+    model = AttendanceCertificateLayout
+    template_name = "pretix_attendance_certificate/organizer_layout_edit.html"
+    permission = "can_change_organizer_settings"
+    form_class = OrganizerLayoutForm
+    context_object_name = "layout"
+
+    def get_object(self, queryset=None):
+        return get_object_or_404(
+            AttendanceCertificateLayout,
+            organizer=self.request.organizer,
+            pk=self.kwargs.get("layout"),
+        )
+
+    def get_success_url(self):
+        return reverse(
+            "plugins:pretix_attendance_certificate:organizer.layouts",
+            kwargs={"organizer": self.request.organizer.slug},
+        )
+
+    def form_valid(self, form):
+        messages.success(self.request, _("Your changes have been saved."))
+        ret = super().form_valid(form)
+        if form.has_changed():
+            form.instance.log_action(
+                "pretix.plugins.pretix_attendance_certificate.layout.changed",
+                user=self.request.user,
+                data={k: str(form.cleaned_data.get(k)) for k in form.changed_data},
+            )
         return ret
 
     def form_invalid(self, form):

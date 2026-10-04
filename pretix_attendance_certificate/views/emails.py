@@ -9,7 +9,8 @@ from django.utils.translation import gettext_lazy as _, ngettext
 
 from pretix.plugins.sendmail.views import BaseSenderView
 from pretix.plugins.sendmail.forms import BaseMailForm
-from pretix.base.models import OrderPosition, Order
+from django.db.models import Exists, OuterRef
+from pretix.base.models import Checkin, OrderPosition, Order
 
 from pretix_attendance_certificate.models import available_layouts
 from pretix_attendance_certificate.tasks import send_certificate_of_attendance_mails
@@ -20,6 +21,24 @@ logger = logging.getLogger(__name__)
 class CertificateEmailForm(BaseMailForm):
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
+        # Optional recipient subgroup, e.g. a "Passed the course" check-in
+        # list that is maintained manually or by scanning. Left empty, the
+        # certificate goes to every attendee with an admission ticket.
+        checkin_lists = self.event.checkin_lists.all()
+        if checkin_lists.exists():
+            self.fields["checkin_lists"] = forms.ModelMultipleChoiceField(
+                queryset=checkin_lists,
+                label=_("Restrict to recipients with check-in on list"),
+                required=False,
+                widget=forms.CheckboxSelectMultiple(
+                    attrs={"class": "scrolling-multiple-choice"}
+                ),
+                help_text=_(
+                    "Only attendees who are checked in on at least one of the "
+                    "selected lists receive the certificate. Leave empty to "
+                    "send to all attendees with an admission ticket."
+                ),
+            )
         # Only ask which template to use when there actually is a choice -
         # events with a single available template keep working unchanged.
         candidates = available_layouts(self.event)
@@ -59,12 +78,24 @@ class SendCertificateEmailView(BaseSenderView):
 
     def get_object_queryset(self, form):
         event = self.request.event
-        return OrderPosition.objects.filter(
+        qs = OrderPosition.objects.filter(
             canceled=False,
             item__admission=True,
             order__event=event,
             order__status__in=[Order.STATUS_PAID],
-        ).distinct()
+        )
+        checkin_lists = form.cleaned_data.get("checkin_lists")
+        if checkin_lists:
+            qs = qs.filter(
+                Exists(
+                    Checkin.all.filter(
+                        position_id=OuterRef("pk"),
+                        list__in=checkin_lists,
+                        successful=True,
+                    )
+                )
+            )
+        return qs.distinct()
 
     def describe_match_size(self, cnt):
         return ngettext(
@@ -112,11 +143,21 @@ class SendCertificateEmailView(BaseSenderView):
 
     @classmethod
     def show_history_meta_data(cls, logentry, _cache_store):
+        if "checkin_list_cache" not in _cache_store:
+            _cache_store["checkin_list_cache"] = {
+                c.pk: str(c) for c in logentry.event.checkin_lists.all()
+            }
+        checkin_lists = [
+            _cache_store["checkin_list_cache"][c["id"]]
+            for c in logentry.parsed_data.get("checkin_lists") or []
+            if c.get("id") in _cache_store["checkin_list_cache"]
+        ]
         tpl = get_template(
             "pretix_attendance_certificate/history_fragment_attendance_certificate.html"
         )
         return tpl.render(
             {
                 "log": logentry,
+                "checkin_lists": checkin_lists,
             }
         )

@@ -1,2 +1,5 @@
 {% load i18n %}
 <br/><span class="fa fa-tag fa-fw"></span> {% trans "Sent to attendees" %}
+{% if checkin_lists %}
+    <br/><span class="fa fa-check-square-o fa-fw"></span> {{ checkin_lists|join:", " }}
+{% endif %}

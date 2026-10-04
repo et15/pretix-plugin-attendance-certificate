@@ -8,6 +8,12 @@ from pretix_attendance_certificate.models import (
 
 
 @pytest.mark.django_db
+def test_str_shows_name_not_object_repr(layout):
+    layout.name = "Teilnahmebestätigung"
+    assert str(layout) == "Teilnahmebestätigung"
+
+
+@pytest.mark.django_db
 def test_single_event_owned_layout_is_available(event, layout):
     assert list(available_layouts(event)) == [layout]
 

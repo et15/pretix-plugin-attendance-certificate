@@ -39,7 +39,7 @@ def control_nav_import(sender, request=None, **kwargs):
         return []
     return [
         {
-            "label": _("Certificate of Attendance"),
+            "label": _("Certificate of attendance"),
             "url": reverse(
                 "plugins:pretix_attendance_certificate:layouts",
                 kwargs={

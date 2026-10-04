@@ -84,7 +84,6 @@ def pos(order, item):
         order=order,
         item=item,
         price=13,
-        admission=True,
         attendee_name_parts={"_legacy": "Marco Acierno"},
         attendee_email="attendee@dummy.test",
     )

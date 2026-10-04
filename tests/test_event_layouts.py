@@ -233,3 +233,80 @@ def test_organizer_template_form_gives_general_heads_up(organizer_client, event,
     assert "{name_given_name} (first name)" in content
     assert "only exist for events that collect the name in parts" in content
     assert "literal text" in content
+
+
+# --- placeholder validation (event templates) ------------------------------
+
+
+def _post_update(client, event, layout, **fields):
+    data = {"name": layout.name, "mail_subject_0": "Subject", "mail_text_0": "Body"}
+    data.update(fields)
+    return client.post(_update_url(event, layout), data)
+
+
+@pytest.mark.django_db
+def test_event_template_accepts_valid_placeholders(logged_in_client, event, layout):
+    event.settings.name_scheme = "given_family"
+    response = _post_update(
+        logged_in_client, event, layout,
+        mail_subject_0="[{event}] for {name_given_name}",
+        mail_text_0="Dear {name_for_salutation}, order {code}: {url}",
+    )
+    assert response.status_code == 302
+    with scopes_disabled():
+        layout.refresh_from_db()
+        assert str(layout.mail_subject) == "[{event}] for {name_given_name}"
+
+
+@pytest.mark.django_db
+def test_event_template_rejects_unknown_placeholder(logged_in_client, event, layout):
+    response = _post_update(logged_in_client, event, layout, mail_text_0="Hello {nmae}")
+    assert response.status_code == 200
+    assert "{nmae}" in response.rendered_content
+    with scopes_disabled():
+        layout.refresh_from_db()
+        assert str(layout.mail_text) != "Hello {nmae}"
+
+
+@pytest.mark.django_db
+def test_event_template_rejects_name_part_the_event_does_not_have(
+    logged_in_client, event, layout
+):
+    event.settings.name_scheme = "full"
+    response = _post_update(
+        logged_in_client, event, layout, mail_text_0="Hi {name_given_name}"
+    )
+    assert response.status_code == 200
+    assert "{name_given_name}" in response.rendered_content
+
+
+@pytest.mark.django_db
+def test_event_template_rejects_unbalanced_braces(logged_in_client, event, layout):
+    assert (
+        _post_update(logged_in_client, event, layout, mail_text_0="Hi {name").status_code
+        == 200
+    )
+
+
+@pytest.mark.django_db
+def test_event_template_validates_every_language(logged_in_client, event, layout):
+    event.settings.locales = ["en", "de"]
+    ok = _post_update(logged_in_client, event, layout, mail_text_0="Hi {name}", mail_text_1="Hallo {name}")
+    assert ok.status_code == 302
+    bad = _post_update(logged_in_client, event, layout, mail_text_0="Hi {name}", mail_text_1="Hallo {nmae}")
+    assert bad.status_code == 200
+
+
+@pytest.mark.django_db
+def test_organizer_template_is_not_validated_against_one_event(
+    organizer_client, event, organizer_layout
+):
+    # An organizer-wide template has no single event to validate against.
+    url = reverse(
+        "plugins:pretix_attendance_certificate:organizer.layouts.update",
+        kwargs={"organizer": event.organizer.slug, "layout": organizer_layout.pk},
+    )
+    response = organizer_client.post(
+        url, {"name": "x", "mail_subject_0": "S", "mail_text_0": "Hi {name_given_name}"}
+    )
+    assert response.status_code == 302

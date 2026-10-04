@@ -2,6 +2,7 @@ from django import forms
 from django.utils.translation import gettext_lazy as _
 
 from pretix.base.email import get_available_placeholders
+from pretix.base.forms import PlaceholderValidator
 
 from pretix_attendance_certificate.models import AttendanceCertificateLayout
 
@@ -22,6 +23,14 @@ QUESTIONS_NOTE = _(
 )
 
 
+def event_placeholders(event):
+    """Placeholder names usable in this event's certificate emails - the same
+    set the "Send out certificates" page offers."""
+    return sorted(
+        get_available_placeholders(event, ["event", "order", "position_or_address"])
+    )
+
+
 def placeholder_help(event=None):
     """Help text listing what can be used in a template's subject and text.
 
@@ -33,9 +42,9 @@ def placeholder_help(event=None):
     if event is None:
         return "%s %s" % (ORGANIZER_PLACEHOLDER_HELP, QUESTIONS_NOTE)
 
-    keys = get_available_placeholders(event, ["event", "order", "position_or_address"])
+    keys = event_placeholders(event)
     text = _("Available placeholders: {list}").format(
-        list=", ".join("{%s}" % key for key in sorted(keys))
+        list=", ".join("{%s}" % key for key in keys)
     )
     if "name_given_name" in keys:
         hint = _(
@@ -75,3 +84,14 @@ class OrganizerLayoutForm(forms.ModelForm):
                 )
         for fname in ("mail_subject", "mail_text"):
             self.fields[fname].help_text = help_text
+            if event is not None:
+                # Same check as on the "Send out certificates" page: an unknown
+                # placeholder (a typo, or {name_given_name} on an event that
+                # only collects a full name) would otherwise reach attendees
+                # as literal text. Organizer-wide templates have no single
+                # event to validate against.
+                self.fields[fname].validators.append(
+                    PlaceholderValidator(
+                        ["{%s}" % key for key in event_placeholders(event)]
+                    )
+                )

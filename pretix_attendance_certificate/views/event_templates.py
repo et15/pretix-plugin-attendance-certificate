@@ -9,7 +9,12 @@ from pretix.control.permissions import EventPermissionRequiredMixin
 from pretix.helpers.compat import CompatDeleteView
 
 from pretix_attendance_certificate.forms import OrganizerLayoutForm
-from pretix_attendance_certificate.models import AttendanceCertificateLayout
+from pretix_attendance_certificate.views.presale import SELF_SERVICE_SETTING
+from pretix_attendance_certificate.models import (
+    AttendanceCertificateLayout,
+    LayoutActivation,
+    available_layouts,
+)
 
 
 class EventLayoutFormMixin:
@@ -34,6 +39,23 @@ class EventLayoutListView(EventPermissionRequiredMixin, TemplateView):
                 organizer=event.organizer
             ).order_by("name")
         ]
+        activations = {
+            a.layout_id: a for a in LayoutActivation.objects.filter(event=event)
+        }
+        # Available templates (own + activated organizer-wide), ranked, with
+        # their per-event settings - edited together in one form.
+        ctx["assignments"] = [
+            {
+                "layout": layout,
+                "checkin_list_id": getattr(activations.get(layout.pk), "checkin_list_id", None),
+                "position": getattr(activations.get(layout.pk), "position", 0),
+            }
+            for layout in available_layouts(event)
+        ]
+        ctx["checkin_lists"] = event.checkin_lists.all()
+        ctx["self_service"] = event.settings.get(
+            SELF_SERVICE_SETTING, as_type=bool, default=False
+        )
         ctx["can_edit_organizer_layouts"] = self.request.user.has_organizer_permission(
             event.organizer, "can_change_organizer_settings", request=self.request
         )
@@ -81,6 +103,45 @@ class EventLayoutToggleView(EventPermissionRequiredMixin, TemplateView):
                     "event": request.event.slug,
                 },
             )
+        )
+
+
+class EventLayoutAssignView(EventPermissionRequiredMixin, TemplateView):
+    """Saves, for every available template, the check-in list it is tied to
+    and its priority, plus the self-service switch."""
+
+    permission = ("can_change_event_settings", "can_view_orders")
+
+    def post(self, request, *args, **kwargs):
+        _require_change_permission(request)
+        event = request.event
+        lists = {str(c.pk): c for c in event.checkin_lists.all()}
+        for layout in available_layouts(event):
+            raw_list = request.POST.get("list_%d" % layout.pk, "")
+            if raw_list and raw_list not in lists:
+                messages.error(request, _("Your changes could not be saved."))
+                return redirect(self._back())
+            try:
+                position = max(0, int(request.POST.get("position_%d" % layout.pk) or 0))
+            except ValueError:
+                messages.error(request, _("Your changes could not be saved."))
+                return redirect(self._back())
+            LayoutActivation.objects.update_or_create(
+                layout=layout,
+                event=event,
+                defaults={"checkin_list": lists.get(raw_list), "position": position},
+            )
+        event.settings.set(SELF_SERVICE_SETTING, bool(request.POST.get("self_service")))
+        messages.success(request, _("Your changes have been saved."))
+        return redirect(self._back())
+
+    def _back(self):
+        return reverse(
+            "plugins:pretix_attendance_certificate:layouts",
+            kwargs={
+                "organizer": self.request.event.organizer.slug,
+                "event": self.request.event.slug,
+            },
         )
 
 

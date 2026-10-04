@@ -12,7 +12,7 @@ from pretix.plugins.sendmail.forms import BaseMailForm
 from django.db.models import Exists, OuterRef
 from pretix.base.models import Checkin, OrderPosition, Order
 
-from pretix_attendance_certificate.models import available_layouts
+from pretix_attendance_certificate.models import LayoutActivation, available_layouts
 from pretix_attendance_certificate.tasks import send_certificate_of_attendance_mails
 
 logger = logging.getLogger(__name__)
@@ -49,7 +49,8 @@ class CertificateEmailForm(BaseMailForm):
                 required=True,
                 help_text=_(
                     "Multiple templates are available for this event - choose "
-                    "which one to send out."
+                    "which one to send out. Templates tied to a check-in list "
+                    "only go to attendees checked in on that list."
                 ),
             )
 
@@ -84,18 +85,40 @@ class SendCertificateEmailView(BaseSenderView):
             order__event=event,
             order__status__in=[Order.STATUS_PAID],
         )
+        # The chosen template may itself be tied to a check-in list: then only
+        # attendees checked in on that list are eligible for it.
+        template_list = self._template_checkin_list(form)
+        if template_list is not None:
+            qs = qs.filter(self._checked_in_on([template_list]))
+        # Optional additional restriction picked in the form.
         checkin_lists = form.cleaned_data.get("checkin_lists")
         if checkin_lists:
-            qs = qs.filter(
-                Exists(
-                    Checkin.all.filter(
-                        position_id=OuterRef("pk"),
-                        list__in=checkin_lists,
-                        successful=True,
-                    )
-                )
-            )
+            qs = qs.filter(self._checked_in_on(checkin_lists))
         return qs.distinct()
+
+    @staticmethod
+    def _checked_in_on(checkin_lists):
+        return Exists(
+            Checkin.all.filter(
+                position_id=OuterRef("pk"),
+                list__in=checkin_lists,
+                successful=True,
+            )
+        )
+
+    def _template_checkin_list(self, form):
+        layout = form.cleaned_data.get("layout")
+        if layout is None:
+            # No choice was asked for: there is at most one template.
+            layout = available_layouts(self.request.event).first()
+        if layout is None:
+            return None
+        activation = (
+            LayoutActivation.objects.filter(layout=layout, event=self.request.event)
+            .select_related("checkin_list")
+            .first()
+        )
+        return activation.checkin_list if activation else None
 
     def describe_match_size(self, cnt):
         return ngettext(

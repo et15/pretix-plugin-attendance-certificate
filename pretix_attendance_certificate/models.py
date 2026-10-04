@@ -98,6 +98,42 @@ class AttendanceCertificateLayout(LoggedModel):
         return cls.objects.filter(Q(event=event) | Q(organizer=event.organizer))
 
 
+class OrganizerSigningCertificate(models.Model):
+    """The organizer-wide certificate used to digitally sign every certificate
+    of attendance of the organizer's events (PAdES, see signing.py).
+
+    The private key is stored unencrypted, like other secrets pretix keeps for
+    an organizer (e.g. SMTP passwords). Access is limited to organizer admins
+    and the key never leaves the server."""
+
+    organizer = models.OneToOneField(
+        "pretixbase.Organizer",
+        on_delete=models.CASCADE,
+        related_name="attendance_certificate_signing",
+    )
+    certificate_pem = models.TextField()
+    private_key_pem = models.TextField()
+    enabled = models.BooleanField(
+        default=True,
+        verbose_name=_("Sign certificates of attendance"),
+        help_text=_(
+            "If enabled, every certificate of attendance of this organizer is "
+            "digitally signed with this certificate."
+        ),
+    )
+    reason = models.CharField(
+        max_length=190,
+        blank=True,
+        default="Certificate of attendance",
+        verbose_name=_("Reason"),
+        help_text=_("Stored in the signature, shown by PDF readers."),
+    )
+    created = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return "Signing certificate of {}".format(self.organizer_id)
+
+
 class LayoutActivation(models.Model):
     """Per-event settings of a template.
 

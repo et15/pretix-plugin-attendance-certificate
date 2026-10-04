@@ -7,6 +7,7 @@ from .views.event_templates import (
     EventLayoutListView,
     EventLayoutToggleView,
 )
+from .views.mail_settings import CertificateMailSettingsView
 from .views.organizer import (
     OrganizerLayoutCreateView,
     OrganizerLayoutDeleteView,
@@ -39,6 +40,11 @@ urlpatterns = [
         r"^control/event/(?P<organizer>[^/]+)/(?P<event>[^/]+)/attendance-certificate/templates/(?P<layout>\d+)/toggle$",
         EventLayoutToggleView.as_view(),
         name="layouts.toggle",
+    ),
+    re_path(
+        r"^control/event/(?P<organizer>[^/]+)/(?P<event>[^/]+)/attendance-certificate/mail-settings$",
+        CertificateMailSettingsView.as_view(),
+        name="mail_settings",
     ),
     re_path(
         r"^control/organizer/(?P<organizer>[^/]+)/attendance-certificate/templates/$",

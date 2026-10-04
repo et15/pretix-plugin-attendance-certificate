@@ -72,8 +72,9 @@ class SendCertificateView(EventPermissionRequiredMixin, View):
         position = _get_position(request, kwargs["position"])
         order = position.order
 
-        # The task sends to position.attendee_email, so require it here too.
-        recipient = position.attendee_email
+        # Fall back to the order's email if the position itself has none
+        # (e.g. group bookings where only the buyer has an email address).
+        recipient = position.attendee_email or order.email
         if not recipient:
             messages.error(
                 request,

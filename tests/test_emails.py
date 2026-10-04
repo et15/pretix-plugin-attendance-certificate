@@ -129,15 +129,18 @@ def _check_in(pos, checkin_list, successful=True):
 
 
 @pytest.mark.django_db
-def test_checkin_list_field_hidden_without_lists(
-    logged_in_client, event, order, pos, layout
+def test_form_has_no_checkin_list_selector(
+    logged_in_client, event, order, pos, layout, passed_list
 ):
+    # The check-in list is bound to the template, so the send form must not
+    # offer a second, competing way to pick it.
     content = logged_in_client.get(_send_url(event)).rendered_content
     assert "checkin_lists" not in content
+    assert "Restrict to recipients with check-in on list" not in content
 
 
 @pytest.mark.django_db
-def test_bulk_send_restricted_to_checkin_list(
+def test_posted_checkin_lists_are_ignored(
     logged_in_client, event, order, pos, pos2, layout, passed_list
 ):
     with scopes_disabled():
@@ -147,74 +150,24 @@ def test_bulk_send_restricted_to_checkin_list(
     response = logged_in_client.post(
         _send_url(event), _post_data(checkin_lists=[passed_list.pk])
     )
-    assert response.status_code == 302
-    assert [m.to for m in djmail.outbox] == [["attendee@dummy.test"]]
-
-    with scopes_disabled():
-        entry = event.logentry_set.get(
-            action_type="pretix_attendance_certificate.sendmail.sent"
-        )
-        assert [c["id"] for c in entry.parsed_data["checkin_lists"]] == [
-            passed_list.pk
-        ]
-
-
-@pytest.mark.django_db
-def test_bulk_send_without_checkin_list_goes_to_everyone(
-    logged_in_client, event, order, pos, pos2, layout, passed_list
-):
-    with scopes_disabled():
-        _check_in(pos, passed_list)
-
-    djmail.outbox = []
-    response = logged_in_client.post(_send_url(event), _post_data())
     assert response.status_code == 302
     assert len(djmail.outbox) == 2
 
 
 @pytest.mark.django_db
-def test_failed_checkin_does_not_count(
-    logged_in_client, event, order, pos, pos2, layout, passed_list
-):
-    with scopes_disabled():
-        _check_in(pos, passed_list, successful=False)
-
-    djmail.outbox = []
-    response = logged_in_client.post(
-        _send_url(event), _post_data(checkin_lists=[passed_list.pk])
-    )
-    # Nobody matches -> pretix shows an error instead of queueing anything.
-    assert response.status_code == 200
-    assert len(djmail.outbox) == 0
-
-
-@pytest.mark.django_db
-def test_checkin_list_and_template_combine(
-    logged_in_client, event, order, pos, pos2, layout, organizer_layout, passed_list
-):
-    with scopes_disabled():
-        organizer_layout.active_events.add(event)
-        _check_in(pos2, passed_list)
-
-    djmail.outbox = []
-    response = logged_in_client.post(
-        _send_url(event),
-        _post_data(layout=organizer_layout.pk, checkin_lists=[passed_list.pk]),
-    )
-    assert response.status_code == 302
-    assert [m.to for m in djmail.outbox] == [["other@dummy.test"]]
-
-
-@pytest.mark.django_db
-def test_history_shows_checkin_list(
+def test_history_shows_checkin_list_of_older_entries(
     logged_in_client, event, order, pos, layout, passed_list
 ):
+    # Entries written before the selector was removed still carry the lists.
     with scopes_disabled():
-        _check_in(pos, passed_list)
-    logged_in_client.post(
-        _send_url(event), _post_data(checkin_lists=[passed_list.pk])
-    )
+        event.log_action(
+            "pretix_attendance_certificate.sendmail.sent",
+            data={
+                "subject": {"en": "S"},
+                "message": {"en": "M"},
+                "checkin_lists": [{"id": passed_list.pk, "name": "x"}],
+            },
+        )
     response = logged_in_client.get(_send_url(event))
     assert response.status_code == 200
-    content = response.rendered_content
-    assert "Passed the course" in content
+    assert "Passed the course" in response.rendered_content

@@ -21,24 +21,6 @@ logger = logging.getLogger(__name__)
 class CertificateEmailForm(BaseMailForm):
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
-        # Optional recipient subgroup, e.g. a "Passed the course" check-in
-        # list that is maintained manually or by scanning. Left empty, the
-        # certificate goes to every attendee with an admission ticket.
-        checkin_lists = self.event.checkin_lists.all()
-        if checkin_lists.exists():
-            self.fields["checkin_lists"] = forms.ModelMultipleChoiceField(
-                queryset=checkin_lists,
-                label=_("Restrict to recipients with check-in on list"),
-                required=False,
-                widget=forms.CheckboxSelectMultiple(
-                    attrs={"class": "scrolling-multiple-choice"}
-                ),
-                help_text=_(
-                    "Only attendees who are checked in on at least one of the "
-                    "selected lists receive the certificate. Leave empty to "
-                    "send to all attendees with an admission ticket."
-                ),
-            )
         # Only ask which template to use when there actually is a choice -
         # events with a single available template keep working unchanged.
         candidates = available_layouts(self.event)
@@ -85,26 +67,20 @@ class SendCertificateEmailView(BaseSenderView):
             order__event=event,
             order__status__in=[Order.STATUS_PAID],
         )
-        # The chosen template may itself be tied to a check-in list: then only
-        # attendees checked in on that list are eligible for it.
+        # The recipient restriction is bound to the template: if it is tied to
+        # a check-in list, only attendees checked in on that list are eligible.
         template_list = self._template_checkin_list(form)
         if template_list is not None:
-            qs = qs.filter(self._checked_in_on([template_list]))
-        # Optional additional restriction picked in the form.
-        checkin_lists = form.cleaned_data.get("checkin_lists")
-        if checkin_lists:
-            qs = qs.filter(self._checked_in_on(checkin_lists))
-        return qs.distinct()
-
-    @staticmethod
-    def _checked_in_on(checkin_lists):
-        return Exists(
-            Checkin.all.filter(
-                position_id=OuterRef("pk"),
-                list__in=checkin_lists,
-                successful=True,
+            qs = qs.filter(
+                Exists(
+                    Checkin.all.filter(
+                        position_id=OuterRef("pk"),
+                        list=template_list,
+                        successful=True,
+                    )
+                )
             )
-        )
+        return qs.distinct()
 
     def _template_checkin_list(self, form):
         layout = form.cleaned_data.get("layout")

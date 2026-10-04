@@ -6,6 +6,7 @@ from django.utils.safestring import mark_safe
 from pretix_attendance_certificate.views.emails import SendCertificateEmailView
 from pretix.control.signals import (
     nav_event,
+    nav_organizer,
     order_position_buttons,
 )
 from pretix.plugins.sendmail.signals import sendmail_view_classes
@@ -65,6 +66,30 @@ def control_nav_import(sender, request=None, **kwargs):
     ]
 
 
+@receiver(nav_organizer, dispatch_uid="certificate_of_attendance_nav_organizer")
+def control_nav_organizer_import(sender, request=None, organizer=None, **kwargs):
+    if not request.user.has_organizer_permission(
+        organizer, "can_change_organizer_settings", request=request
+    ):
+        return []
+    if not organizer.events.filter(
+        plugins__icontains="pretix_attendance_certificate"
+    ).exists():
+        return []
+    url = resolve(request.path_info)
+    return [
+        {
+            "label": _("Certificate templates"),
+            "url": reverse(
+                "plugins:pretix_attendance_certificate:organizer.layouts",
+                kwargs={"organizer": organizer.slug},
+            ),
+            "active": url.namespace == "plugins:pretix_attendance_certificate"
+            and url.url_name.startswith("organizer.layouts"),
+        }
+    ]
+
+
 @receiver(
     sendmail_view_classes, dispatch_uid="pretix_attendance_certificate_sendmail_view"
 )
@@ -111,6 +136,12 @@ def pretix_logentry_display(sender, logentry, **kwargs):
         == "pretix.plugins.pretix_attendance_certificate.layout.changed"
     ):
         return _("The layout of the certificate of attendance has been changed.")
+
+    if (
+        logentry.action_type
+        == "pretix.plugins.pretix_attendance_certificate.layout.deleted"
+    ):
+        return _("A certificate of attendance template has been deleted.")
 
     if logentry.action_type == "pretix_attendance_certificate.sendmail.sent":
         return _("The certificate of attendance has been sent out to all attendees.")

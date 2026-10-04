@@ -1,0 +1,40 @@
+{% extends "pretixcontrol/organizers/base.html" %}
+{% load i18n %}
+{% block title %}{% trans "Certificate of attendance templates" %}{% endblock %}
+{% block inner %}
+    <h1>{% trans "Certificate of attendance templates" %}</h1>
+    <p>
+        {% blocktrans trimmed %}
+            These templates are available to all events of this organizer. Each event can choose
+            which of them to use in addition to its own event-specific templates.
+        {% endblocktrans %}
+    </p>
+    <a href="{% url "plugins:pretix_attendance_certificate:organizer.layouts.add" organizer=request.organizer.slug %}"
+            class="btn btn-default">
+        <span class="fa fa-plus"></span>
+        {% trans "Create a new template" %}
+    </a>
+    <table class="table table-condensed table-hover">
+        <thead>
+        <tr>
+            <th>{% trans "Name" %}</th>
+            <th></th>
+        </tr>
+        </thead>
+        <tbody>
+        {% for l in layouts %}
+            <tr>
+                <td><strong>{{ l.name }}</strong></td>
+                <td class="text-right flip">
+                    <a href="{% url "plugins:pretix_attendance_certificate:organizer.layouts.delete" organizer=request.organizer.slug layout=l.pk %}"
+                            class="btn btn-danger btn-sm"><i class="fa fa-trash"></i></a>
+                </td>
+            </tr>
+        {% empty %}
+            <tr>
+                <td colspan="2">{% trans "You haven't created any organizer-wide templates yet." %}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+{% endblock %}

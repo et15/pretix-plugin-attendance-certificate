@@ -83,3 +83,17 @@ def test_use_template_button_and_data_shown_with_multiple_candidates(
     assert "Use this template's email text" in content
     assert "Org subject" in content
     assert "Org body" in content
+
+
+@pytest.mark.django_db
+def test_use_template_button_script_is_not_inline(
+    logged_in_client, event, order, pos, layout, organizer_layout
+):
+    # pretix's CSP blocks inline scripts, so the click handler has to be a
+    # static file or the button silently does nothing.
+    with scopes_disabled():
+        organizer_layout.active_events.add(event)
+
+    content = logged_in_client.get(_send_url(event)).rendered_content
+    assert "pretix_attendance_certificate/use_template_text.js" in content
+    assert "addEventListener" not in content

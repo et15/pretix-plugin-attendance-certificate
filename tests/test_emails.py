@@ -58,3 +58,28 @@ def test_bulk_send_with_explicit_layout_choice(
     )
     assert response.status_code == 302
     assert len(djmail.outbox) == 1
+
+
+@pytest.mark.django_db
+def test_use_template_button_hidden_with_single_candidate(
+    logged_in_client, event, order, pos, layout
+):
+    response = logged_in_client.get(_send_url(event))
+    assert "Use this template's email text" not in response.rendered_content
+
+
+@pytest.mark.django_db
+def test_use_template_button_and_data_shown_with_multiple_candidates(
+    logged_in_client, event, order, pos, layout, organizer_layout
+):
+    with scopes_disabled():
+        organizer_layout.active_events.add(event)
+        organizer_layout.mail_subject = "Org subject"
+        organizer_layout.mail_text = "Org body"
+        organizer_layout.save()
+
+    response = logged_in_client.get(_send_url(event))
+    content = response.rendered_content
+    assert "Use this template's email text" in content
+    assert "Org subject" in content
+    assert "Org body" in content

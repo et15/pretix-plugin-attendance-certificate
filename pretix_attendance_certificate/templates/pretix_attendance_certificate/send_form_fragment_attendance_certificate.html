@@ -3,4 +3,45 @@
 <p>{% trans 'This email will be sent to all attendees with an admission ticket' %}</p>
 {% if form.layout %}
     {% bootstrap_field form.layout layout="horizontal" %}
+    <div class="form-group">
+        <div class="col-md-9 col-md-offset-3">
+            <button type="button" id="attendance-certificate-use-template-text"
+                    class="btn btn-default btn-sm">
+                {% trans "Use this template's email text" %}
+            </button>
+            <p class="help-block">
+                {% trans "Fills the subject/text below from the selected template - you can still edit them afterwards." %}
+            </p>
+        </div>
+    </div>
+    {{ layout_mail_texts|json_script:"attendance-certificate-mail-texts" }}
+    <script>
+        (function () {
+            var btn = document.getElementById("attendance-certificate-use-template-text");
+            var select = document.getElementById("id_layout");
+            var dataEl = document.getElementById("attendance-certificate-mail-texts");
+            if (!btn || !select || !dataEl) {
+                return;
+            }
+            var texts = JSON.parse(dataEl.textContent);
+            btn.addEventListener("click", function () {
+                var entry = texts[select.value];
+                if (!entry) {
+                    return;
+                }
+                entry.subject.forEach(function (value, i) {
+                    var el = document.getElementById("id_subject_" + i);
+                    if (el) {
+                        el.value = value;
+                    }
+                });
+                entry.message.forEach(function (value, i) {
+                    var el = document.getElementById("id_message_" + i);
+                    if (el) {
+                        el.value = value;
+                    }
+                });
+            });
+        })();
+    </script>
 {% endif %}

@@ -6,55 +6,48 @@ from pretix.base.email import get_available_placeholders
 from pretix_attendance_certificate.models import AttendanceCertificateLayout
 
 
+ORGANIZER_PLACEHOLDER_HELP = _(
+    "Placeholders: {event} (event name), {name} (attendee's full name), "
+    "{name_for_salutation} (name as used in a salutation, e.g. \"Mr Doe\"), "
+    "{code} (order code), {url} (link to the order page). Heads-up: "
+    "{name_given_name} (first name) and {name_family_name} (last name) only exist "
+    "for events that collect the name in parts. For any other event they are sent "
+    "as literal text, so use {name} if the template is shared between events. "
+    "Which further placeholders exist (e.g. event meta data) depends on the event."
+)
+
+QUESTIONS_NOTE = _(
+    "Answers to registration questions are not available here - put them on the "
+    "certificate itself in the layout editor."
+)
+
+
 def placeholder_help(event=None):
     """Help text listing what can be used in a template's subject and text.
 
-    With an event the name-part placeholders are the ones its name scheme
-    really offers (pretix generates them, e.g. {name_given_name}); without one
-    (organizer-wide templates) the common scheme is given as an example.
+    For an event this is the very list the "Send out certificates" page shows
+    (everything pretix and other plugins offer for this event, so event meta
+    data and the event's name parts are included). Organizer-wide templates
+    have no single event to ask, so they get a general note.
     """
-    text = _(
-        "Placeholders: {event} (event name), {name} (attendee's full name), "
-        "{name_for_salutation} (name as used in a salutation, e.g. \"Mr Doe\"), "
-        "{code} (order code), {url} (link to the order page)."
-    )
     if event is None:
-        parts = _(
-            " Heads-up: {name_given_name} (first name) and {name_family_name} "
-            "(last name) only exist for events that collect the name in parts. "
-            "For any other event they are sent as literal text, so use {name} "
-            "if the template is shared between events."
+        return "%s %s" % (ORGANIZER_PLACEHOLDER_HELP, QUESTIONS_NOTE)
+
+    keys = get_available_placeholders(event, ["event", "order", "position_or_address"])
+    text = _("Available placeholders: {list}").format(
+        list=", ".join("{%s}" % key for key in sorted(keys))
+    )
+    if "name_given_name" in keys:
+        hint = _(
+            "{name} is the attendee's full name, {name_given_name} their first name."
         )
     else:
-        labels = {
-            "{name_given_name}": _("first name"),
-            "{name_family_name}": _("last name"),
-            "{name_title}": _("title"),
-        }
-        names = sorted(
-            "{%s}" % key
-            for key in get_available_placeholders(
-                event, ["event", "order", "position_or_address"]
-            )
-            if key.startswith("name_") and key != "name_for_salutation"
+        hint = _(
+            "{name} is the attendee's full name. This event only collects a full "
+            "name, so {name_given_name} (first name) is not available - it would "
+            "be sent as literal text."
         )
-        if names:
-            parts = _(" Name parts of this event: {names}.").format(
-                names=", ".join(
-                    "%s (%s)" % (n, labels[n]) if n in labels else n for n in names
-                )
-            )
-        else:
-            parts = _(
-                " Heads-up: this event only collects a full name, so "
-                "{name_given_name} (first name) is not available here - it would "
-                "be sent as literal text. Use {name}."
-            )
-    note = _(
-        " Answers to registration questions are not available here - put them "
-        "on the certificate itself in the layout editor."
-    )
-    return text + parts + note
+    return "%s %s %s" % (text, hint, QUESTIONS_NOTE)
 
 
 class OrganizerLayoutForm(forms.ModelForm):

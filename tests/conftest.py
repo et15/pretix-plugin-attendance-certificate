@@ -110,6 +110,7 @@ def logged_in_client(client, event):
         organizer=event.organizer,
         can_view_orders=True,
         can_change_orders=True,
+        can_change_event_settings=True,
     )
     team.members.add(user)
     team.limit_events.add(event)
@@ -123,6 +124,7 @@ def organizer_client(client, event):
     team = Team.objects.create(
         organizer=event.organizer,
         can_change_organizer_settings=True,
+        all_events=True,
     )
     team.members.add(user)
     client.force_login(user)

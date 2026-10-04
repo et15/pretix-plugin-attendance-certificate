@@ -123,3 +123,4 @@ def test_nav_entry_shown_with_permission_and_active_event(organizer_client, even
         )
     assert len(entries) == 1
     assert entries[0]["label"] == "Certificate templates"
+    assert entries[0]["icon"] == "id-card"

@@ -85,6 +85,7 @@ def control_nav_organizer_import(sender, request=None, organizer=None, **kwargs)
                 "plugins:pretix_attendance_certificate:organizer.layouts",
                 kwargs={"organizer": organizer.slug},
             ),
+            "icon": "id-card",
             "active": url.namespace == "plugins:pretix_attendance_certificate"
             and url.url_name.startswith("organizer.layouts"),
         }

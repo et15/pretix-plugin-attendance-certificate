@@ -1,6 +1,5 @@
 {% load i18n %}
 {% load bootstrap3 %}
-{% load static %}
 <p>{% trans 'This email will be sent to all attendees with an admission ticket' %}</p>
 {% if form.layout %}
     {% bootstrap_field form.layout layout="horizontal" %}
@@ -16,5 +15,7 @@
         </div>
     </div>
     {{ layout_mail_texts|json_script:"attendance-certificate-mail-texts" }}
-    <script src="{% static 'pretix_attendance_certificate/use_template_text.js' %}"></script>
+    {% if use_template_text_js %}
+        <script src="{{ use_template_text_js }}"></script>
+    {% endif %}
 {% endif %}

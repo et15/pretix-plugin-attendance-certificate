@@ -1,6 +1,5 @@
 from django.db import models
-from django.db.models import OuterRef, Q, Subquery, Value
-from django.db.models.functions import Coalesce
+from django.db.models import Q
 from django_scopes import scope
 from django.utils.crypto import get_random_string
 from i18nfield.fields import I18nCharField, I18nTextField
@@ -104,7 +103,7 @@ class LayoutActivation(models.Model):
 
     For an organizer-wide template the existence of this row *is* the
     activation for the event. Event-owned templates are always available, so
-    for them the row is optional and only carries the settings below.
+    for them the row is optional and only carries the check-in list.
     """
 
     layout = models.ForeignKey(
@@ -129,14 +128,6 @@ class LayoutActivation(models.Model):
             "template. Leave empty to make it available to everyone."
         ),
     )
-    position = models.PositiveIntegerField(
-        default=0,
-        verbose_name=_("Priority"),
-        help_text=_(
-            "Lower numbers rank higher. An attendee's primary certificate is "
-            "the highest ranked template they are eligible for."
-        ),
-    )
 
     class Meta:
         unique_together = (("layout", "event"),)
@@ -144,17 +135,12 @@ class LayoutActivation(models.Model):
 
 def available_layouts(event):
     """Layouts actually usable for rendering a certificate for this event:
-    its own layouts plus organizer-wide ones explicitly activated for it,
-    best-ranked first."""
-    activation = LayoutActivation.objects.filter(layout=OuterRef("pk"), event=event)
+    its own layouts plus organizer-wide ones explicitly activated for it."""
     return (
         AttendanceCertificateLayout.objects.filter(
             Q(event=event) | Q(organizer=event.organizer, active_events=event)
         )
-        .annotate(
-            rank=Coalesce(Subquery(activation.values("position")[:1]), Value(0))
-        )
-        .order_by("rank", "name", "pk")
+        .order_by("name", "pk")
         .distinct()
     )
 
@@ -173,7 +159,7 @@ class CertificateOption:
 
 
 def certificate_options(position):
-    """All templates available for the position's event, ranked, each flagged
+    """All templates available for the position's event, each flagged
     with whether the attendee is eligible (the template is tied to no check-in
     list, or the attendee has a successful check-in on that list)."""
     from pretix.base.models import Checkin
@@ -203,8 +189,3 @@ def certificate_options(position):
             )
         )
     return options
-
-
-def primary_option(options):
-    """The highest ranked template the attendee is eligible for, if any."""
-    return next((o for o in options if o.applicable), None)

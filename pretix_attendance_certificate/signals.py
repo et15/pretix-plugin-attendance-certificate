@@ -123,7 +123,7 @@ def copy_attendance_certificate_data(sender, other, **kwargs):
         LayoutActivation.objects.update_or_create(
             layout=new_layout,
             event=sender,
-            defaults={"checkin_list": checkin_list, "position": old.position},
+            defaults={"checkin_list": checkin_list},
         )
 
     for old_layout in other.attendance_certificate_layouts.all():

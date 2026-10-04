@@ -1,6 +1,6 @@
 {% load i18n %}
 {% load bootstrap3 %}
-<p>{% trans 'This email will be sent to all attendees with an admission ticket' %}</p>
+<p>{% trans 'This email will be sent to all attendees with an admission ticket. If the template is tied to a check-in list, only to those checked in on that list.' %}</p>
 {% if form.layout %}
     {% bootstrap_field form.layout layout="horizontal" %}
     <div class="form-group">

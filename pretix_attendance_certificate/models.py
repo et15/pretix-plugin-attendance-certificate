@@ -1,5 +1,7 @@
 from django.db import models
-from django.db.models import Q
+from django.db.models import OuterRef, Q, Subquery, Value
+from django.db.models.functions import Coalesce
+from django_scopes import scope
 from django.utils.crypto import get_random_string
 from i18nfield.fields import I18nCharField, I18nTextField
 import string
@@ -37,6 +39,8 @@ class AttendanceCertificateLayout(LoggedModel):
     )
     active_events = models.ManyToManyField(
         "pretixbase.Event",
+        through="LayoutActivation",
+        through_fields=("layout", "event"),
         blank=True,
         related_name="active_organizer_certificate_layouts",
     )
@@ -95,9 +99,112 @@ class AttendanceCertificateLayout(LoggedModel):
         return cls.objects.filter(Q(event=event) | Q(organizer=event.organizer))
 
 
+class LayoutActivation(models.Model):
+    """Per-event settings of a template.
+
+    For an organizer-wide template the existence of this row *is* the
+    activation for the event. Event-owned templates are always available, so
+    for them the row is optional and only carries the settings below.
+    """
+
+    layout = models.ForeignKey(
+        AttendanceCertificateLayout,
+        on_delete=models.CASCADE,
+        related_name="activations",
+    )
+    event = models.ForeignKey(
+        "pretixbase.Event",
+        on_delete=models.CASCADE,
+        related_name="attendance_certificate_activations",
+    )
+    checkin_list = models.ForeignKey(
+        "pretixbase.CheckinList",
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+        related_name="+",
+        verbose_name=_("Check-in list"),
+        help_text=_(
+            "Only attendees checked in on this list are eligible for the "
+            "template. Leave empty to make it available to everyone."
+        ),
+    )
+    position = models.PositiveIntegerField(
+        default=0,
+        verbose_name=_("Priority"),
+        help_text=_(
+            "Lower numbers rank higher. An attendee's primary certificate is "
+            "the highest ranked template they are eligible for."
+        ),
+    )
+
+    class Meta:
+        unique_together = (("layout", "event"),)
+
+
 def available_layouts(event):
     """Layouts actually usable for rendering a certificate for this event:
-    its own layouts plus organizer-wide ones explicitly activated for it."""
-    return AttendanceCertificateLayout.objects.filter(
-        Q(event=event) | Q(organizer=event.organizer, active_events=event)
-    ).distinct()
+    its own layouts plus organizer-wide ones explicitly activated for it,
+    best-ranked first."""
+    activation = LayoutActivation.objects.filter(layout=OuterRef("pk"), event=event)
+    return (
+        AttendanceCertificateLayout.objects.filter(
+            Q(event=event) | Q(organizer=event.organizer, active_events=event)
+        )
+        .annotate(
+            rank=Coalesce(Subquery(activation.values("position")[:1]), Value(0))
+        )
+        .order_by("rank", "name", "pk")
+        .distinct()
+    )
+
+
+class CertificateOption:
+    """One template as seen from one attendee."""
+
+    def __init__(self, layout, checkin_list, applicable):
+        self.layout = layout
+        self.checkin_list = checkin_list
+        self.applicable = applicable
+
+    @property
+    def pk(self):
+        return self.layout.pk
+
+
+def certificate_options(position):
+    """All templates available for the position's event, ranked, each flagged
+    with whether the attendee is eligible (the template is tied to no check-in
+    list, or the attendee has a successful check-in on that list)."""
+    from pretix.base.models import Checkin
+
+    event = position.order.event
+    activations = {
+        a.layout_id: a
+        for a in LayoutActivation.objects.filter(event=event).select_related(
+            "checkin_list"
+        )
+    }
+    with scope(organizer=event.organizer):
+        checked_in = set(
+            Checkin.all.filter(position=position, successful=True).values_list(
+                "list_id", flat=True
+            )
+        )
+    options = []
+    for layout in available_layouts(event):
+        activation = activations.get(layout.pk)
+        checkin_list = activation.checkin_list if activation else None
+        options.append(
+            CertificateOption(
+                layout,
+                checkin_list,
+                checkin_list is None or checkin_list.pk in checked_in,
+            )
+        )
+    return options
+
+
+def primary_option(options):
+    """The highest ranked template the attendee is eligible for, if any."""
+    return next((o for o in options if o.applicable), None)

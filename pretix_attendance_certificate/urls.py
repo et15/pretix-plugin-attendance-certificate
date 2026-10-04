@@ -2,6 +2,7 @@ from django.urls import re_path
 from .views.editor import EditorView
 from .views.emails import SendCertificateEmailView
 from .views.event_templates import (
+    EventLayoutAssignView,
     EventLayoutCreateView,
     EventLayoutDeleteView,
     EventLayoutListView,
@@ -15,6 +16,7 @@ from .views.organizer import (
     OrganizerLayoutUpdateView,
 )
 from .views.positions import DownloadCertificateView, SendCertificateView
+from .views.presale import SelfServiceDownloadView
 
 urlpatterns = [
     re_path(
@@ -46,6 +48,11 @@ urlpatterns = [
         r"^control/event/(?P<organizer>[^/]+)/(?P<event>[^/]+)/attendance-certificate/templates/(?P<layout>\d+)/toggle$",
         EventLayoutToggleView.as_view(),
         name="layouts.toggle",
+    ),
+    re_path(
+        r"^control/event/(?P<organizer>[^/]+)/(?P<event>[^/]+)/attendance-certificate/templates/assign$",
+        EventLayoutAssignView.as_view(),
+        name="layouts.assign",
     ),
     re_path(
         r"^control/organizer/(?P<organizer>[^/]+)/attendance-certificate/templates/$",
@@ -81,5 +88,14 @@ urlpatterns = [
         r"^control/event/(?P<organizer>[^/]+)/(?P<event>[^/]+)/attendance-certificate/position/(?P<position>\d+)/send$",
         SendCertificateView.as_view(),
         name="position.send",
+    ),
+]
+
+# Customer-facing (presale) URLs.
+event_patterns = [
+    re_path(
+        r"^attendance-certificate/(?P<order>[^/]+)/(?P<secret>[A-Za-z0-9]+)/(?P<position>\d+)/(?P<layout>\d+)/download$",
+        SelfServiceDownloadView.as_view(),
+        name="presale.download",
     ),
 ]

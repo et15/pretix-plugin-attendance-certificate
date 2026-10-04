@@ -1,3 +1,4 @@
+import copy
 from django.utils.translation import gettext_lazy as _
 from django.urls import resolve, reverse
 from django.dispatch import receiver
@@ -10,9 +11,12 @@ from pretix.control.signals import (
     order_position_buttons,
 )
 from pretix.plugins.sendmail.signals import sendmail_view_classes
-from pretix.base.signals import logentry_display
+from pretix.base.signals import event_copy_data, logentry_display
 from pretix.base.models import OrderPosition
-from pretix_attendance_certificate.models import available_layouts
+from pretix_attendance_certificate.models import (
+    AttendanceCertificateLayout,
+    available_layouts,
+)
 
 
 @receiver(nav_event, dispatch_uid="certificate_of_attendance_nav")
@@ -90,6 +94,29 @@ def control_nav_organizer_import(sender, request=None, organizer=None, **kwargs)
             and url.url_name.startswith("organizer.layouts"),
         }
     ]
+
+
+@receiver(
+    event_copy_data, dispatch_uid="pretix_attendance_certificate_copy_data"
+)
+def copy_attendance_certificate_data(sender, other, **kwargs):
+    """Event-owned templates aren't copied by pretix's generic event-copy
+    machinery (only its own core models are) - this carries them over, along
+    with which organizer-wide templates the source event had activated."""
+    for old_layout in other.attendance_certificate_layouts.all():
+        new_layout = copy.copy(old_layout)
+        new_layout.pk = None
+        new_layout.event = sender
+        new_layout.save()
+        if old_layout.background and old_layout.background.name:
+            new_layout.background.save("background.pdf", old_layout.background)
+
+    if sender.organizer_id == other.organizer_id:
+        activated = AttendanceCertificateLayout.objects.filter(
+            organizer=other.organizer, active_events=other
+        )
+        for organizer_layout in activated:
+            organizer_layout.active_events.add(sender)
 
 
 @receiver(

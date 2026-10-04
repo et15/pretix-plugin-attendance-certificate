@@ -12,6 +12,7 @@ from pretix.control.signals import (
 from pretix.plugins.sendmail.signals import sendmail_view_classes
 from pretix.base.signals import logentry_display
 from pretix.base.models import OrderPosition
+from pretix_attendance_certificate.models import available_layouts
 
 
 @receiver(nav_event, dispatch_uid="certificate_of_attendance_nav")
@@ -114,6 +115,7 @@ def control_order_position_buttons(sender, position, order, request, **kwargs):
             "order": order,
             "position": position,
             "request": request,
+            "layouts": list(available_layouts(sender)),
         },
         request=request,
     ).strip())

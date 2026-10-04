@@ -1,9 +1,19 @@
 {% load i18n %}
-<a href="{% url "plugins:pretix_attendance_certificate:position.download" event=event.slug organizer=event.organizer.slug position=position.pk %}"
-        class="btn btn-xs btn-default" target="_blank">
-    <span class="fa fa-id-card"></span>
-    {% trans "Certificate of attendance" %}
-</a>
+{% if layouts|length > 1 %}
+    {% for l in layouts %}
+        <a href="{% url "plugins:pretix_attendance_certificate:position.download" event=event.slug organizer=event.organizer.slug position=position.pk %}?layout={{ l.pk }}"
+                class="btn btn-xs btn-default" target="_blank">
+            <span class="fa fa-id-card"></span>
+            {{ l.name }}
+        </a>
+    {% endfor %}
+{% else %}
+    <a href="{% url "plugins:pretix_attendance_certificate:position.download" event=event.slug organizer=event.organizer.slug position=position.pk %}"
+            class="btn btn-xs btn-default" target="_blank">
+        <span class="fa fa-id-card"></span>
+        {% trans "Certificate of attendance" %}
+    </a>
+{% endif %}
 {% if position.attendee_email or order.email %}
     <form action="{% url "plugins:pretix_attendance_certificate:position.send" event=event.slug organizer=event.organizer.slug position=position.pk %}"
             method="post" class="form-inline helper-display-inline">

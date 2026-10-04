@@ -6,6 +6,8 @@ from django_scopes import scopes_disabled
 
 from pretix.base.models import Team, User
 
+from pretix_attendance_certificate.models import AttendanceCertificateLayout
+
 
 def _messages(response):
     return [str(m) for m in get_messages(response.wsgi_request)]
@@ -144,6 +146,66 @@ def test_send_certificate_without_email(logged_in_client, event, order, pos, lay
     assert response.status_code == 302
     assert len(djmail.outbox) == 0
     assert any("no email" in m.lower() for m in _messages(response))
+
+
+@pytest.mark.django_db
+def test_download_without_any_layout(logged_in_client, event, order, pos):
+    response = logged_in_client.get(_download_url(event, pos))
+    assert response.status_code == 302
+    assert any(
+        "no certificate of attendance layout" in m.lower()
+        for m in _messages(response)
+    )
+
+
+@pytest.mark.django_db
+def test_download_with_multiple_layouts_requires_explicit_choice(
+    logged_in_client, event, order, pos, layout, organizer_layout
+):
+    with scopes_disabled():
+        organizer_layout.active_events.add(event)
+
+    # Both layout names show up as separate buttons on the order page.
+    response = logged_in_client.get(_order_url(event, order))
+    content = response.content.decode()
+    assert layout.name in content
+    assert organizer_layout.name in content
+
+    # Downloading without picking one is an error, not a silent guess.
+    response = logged_in_client.get(_download_url(event, pos))
+    assert response.status_code == 302
+    assert any(
+        "multiple templates" in m.lower() for m in _messages(response)
+    )
+
+
+@pytest.mark.django_db
+def test_download_with_explicit_layout_param(
+    logged_in_client, event, order, pos, layout, organizer_layout
+):
+    with scopes_disabled():
+        organizer_layout.active_events.add(event)
+
+    response = logged_in_client.get(_download_url(event, pos) + "?layout={}".format(
+        organizer_layout.pk
+    ))
+    assert response.status_code == 200
+    assert response["Content-Type"] == "application/pdf"
+
+
+@pytest.mark.django_db
+def test_download_with_layout_param_not_available_for_event(
+    logged_in_client, event, order, pos, layout
+):
+    with scopes_disabled():
+        other_layout = AttendanceCertificateLayout.objects.create(
+            organizer=event.organizer, name="Not activated"
+        )
+    response = logged_in_client.get(
+        _download_url(event, pos) + "?layout={}".format(other_layout.pk)
+    )
+    assert response.status_code == 302
+    assert any("not available" in m.lower() for m in _messages(response))
 
 
 @pytest.mark.django_db

@@ -135,6 +135,45 @@ def test_send_certificate_falls_back_to_order_email(
 
 
 @pytest.mark.django_db
+def test_send_certificate_with_multiple_layouts_requires_explicit_choice(
+    logged_in_client, event, order, pos, layout, organizer_layout
+):
+    with scopes_disabled():
+        organizer_layout.active_events.add(event)
+    djmail.outbox = []
+    response = logged_in_client.post(_send_url(event, pos))
+    assert response.status_code == 302
+    assert len(djmail.outbox) == 0
+    assert any("multiple templates" in m.lower() for m in _messages(response))
+
+
+@pytest.mark.django_db
+def test_send_certificate_with_explicit_layout_param(
+    logged_in_client, event, order, pos, layout, organizer_layout
+):
+    with scopes_disabled():
+        organizer_layout.active_events.add(event)
+    djmail.outbox = []
+    response = logged_in_client.post(
+        _send_url(event, pos), {"layout": organizer_layout.pk}
+    )
+    assert response.status_code == 302
+    assert len(djmail.outbox) == 1
+
+
+@pytest.mark.django_db
+def test_position_buttons_show_one_send_form_per_layout(
+    logged_in_client, event, order, pos, layout, organizer_layout
+):
+    with scopes_disabled():
+        organizer_layout.active_events.add(event)
+    response = logged_in_client.get(_order_url(event, order))
+    content = response.content.decode()
+    assert content.count('name="layout" value="{}"'.format(layout.pk)) == 1
+    assert content.count('name="layout" value="{}"'.format(organizer_layout.pk)) == 1
+
+
+@pytest.mark.django_db
 def test_send_certificate_without_email(logged_in_client, event, order, pos, layout):
     with scopes_disabled():
         pos.attendee_email = None

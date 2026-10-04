@@ -109,6 +109,11 @@ class SendCertificateView(EventPermissionRequiredMixin, View):
             )
             return redirect(_order_url(request, order))
 
+        layout, error = resolve_requested_layout(request, request.event)
+        if error:
+            messages.error(request, error)
+            return redirect(_order_url(request, order))
+
         send_certificate_of_attendance_mails.apply_async(
             kwargs={
                 "event": request.event.pk,
@@ -116,6 +121,7 @@ class SendCertificateView(EventPermissionRequiredMixin, View):
                 "subject": DEFAULT_SUBJECT,
                 "message": DEFAULT_MESSAGE,
                 "objects": [position.pk],
+                "layout_id": layout.pk,
             }
         )
         messages.success(

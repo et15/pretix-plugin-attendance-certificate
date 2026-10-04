@@ -21,7 +21,7 @@ description = "Create attendance certificates"
 authors = [
     {name = "Python Italia"},
 ]
-dependencies = []
+dependencies = ["pyhanko>=0.25"]
 requires-python = ">=3.9,<4.0"
 readme = "README.md"
 license = {text = "MIT"}

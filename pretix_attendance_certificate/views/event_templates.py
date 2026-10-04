@@ -32,7 +32,15 @@ class EventLayoutListView(EventPermissionRequiredMixin, TemplateView):
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         event = self.request.event
-        ctx["event_layouts"] = event.attendance_certificate_layouts.all()
+        inactive = set(
+            LayoutActivation.objects.filter(event=event, active=False).values_list(
+                "layout_id", flat=True
+            )
+        )
+        ctx["event_layouts"] = [
+            {"layout": layout, "active": layout.pk not in inactive}
+            for layout in event.attendance_certificate_layouts.all()
+        ]
         ctx["organizer_layouts"] = [
             {"layout": layout, "active": layout.active_events.filter(pk=event.pk).exists()}
             for layout in AttendanceCertificateLayout.objects.filter(
@@ -74,23 +82,34 @@ class EventLayoutToggleView(EventPermissionRequiredMixin, TemplateView):
     def post(self, request, *args, **kwargs):
         _require_change_permission(request)
         layout = get_object_or_404(
-            AttendanceCertificateLayout,
-            organizer=request.event.organizer,
+            AttendanceCertificateLayout.visible_to(request.event),
             pk=kwargs["layout"],
         )
-        if layout.active_events.filter(pk=request.event.pk).exists():
-            layout.active_events.remove(request.event)
+        if layout.organizer_id:
+            now_active = not layout.active_events.filter(pk=request.event.pk).exists()
+            if now_active:
+                layout.active_events.add(request.event)
+            else:
+                layout.active_events.remove(request.event)
+        else:
+            # Event-owned templates are always available unless flagged off.
+            activation, _created = LayoutActivation.objects.get_or_create(
+                layout=layout, event=request.event
+            )
+            now_active = not activation.active
+            activation.active = now_active
+            activation.save(update_fields=["active"])
+        if now_active:
             messages.success(
                 request,
-                _('The template "{name}" is no longer available for this event.').format(
+                _('The template "{name}" is now available for this event.').format(
                     name=layout.name
                 ),
             )
         else:
-            layout.active_events.add(request.event)
             messages.success(
                 request,
-                _('The template "{name}" is now available for this event.').format(
+                _('The template "{name}" is no longer available for this event.').format(
                     name=layout.name
                 ),
             )

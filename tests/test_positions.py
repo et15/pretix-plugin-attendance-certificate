@@ -45,7 +45,7 @@ def _order_url(event, order):
 def test_position_buttons_rendered(logged_in_client, event, order, pos, layout):
     response = logged_in_client.get(_order_url(event, order))
     assert response.status_code == 200
-    content = response.rendered_content
+    content = response.content.decode()
     assert _download_url(event, pos) in content
     assert "Email certificate" in content
 
@@ -60,7 +60,7 @@ def test_email_button_shown_with_order_email_fallback(
         pos.attendee_email = None
         pos.save()
     response = logged_in_client.get(_order_url(event, order))
-    content = response.rendered_content
+    content = response.content.decode()
     assert _download_url(event, pos) in content
     assert "Email certificate" in content
 
@@ -75,7 +75,7 @@ def test_email_button_hidden_without_any_email(
         order.email = None
         order.save()
     response = logged_in_client.get(_order_url(event, order))
-    content = response.rendered_content
+    content = response.content.decode()
     # Download is always available, the email button is not.
     assert _download_url(event, pos) in content
     assert "Email certificate" not in content
@@ -184,7 +184,7 @@ def test_position_buttons_show_one_send_form_per_layout(
     with scopes_disabled():
         organizer_layout.active_events.add(event)
     response = logged_in_client.get(_order_url(event, order))
-    content = response.rendered_content
+    content = response.content.decode()
     assert content.count('name="layout" value="{}"'.format(layout.pk)) == 1
     assert content.count('name="layout" value="{}"'.format(organizer_layout.pk)) == 1
 
@@ -222,7 +222,7 @@ def test_download_with_multiple_layouts_requires_explicit_choice(
 
     # Both layout names show up as separate buttons on the order page.
     response = logged_in_client.get(_order_url(event, order))
-    content = response.rendered_content
+    content = response.content.decode()
     assert layout.name in content
     assert organizer_layout.name in content
 

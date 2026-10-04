@@ -105,7 +105,7 @@ def test_eligibility_follows_successful_checkins(event, order, pos, layout, pass
 def test_order_view_disables_buttons_for_ineligible_templates(
     logged_in_client, event, order, pos, layout, passed_layout
 ):
-    content = logged_in_client.get(_order_url(event, order)).rendered_content
+    content = logged_in_client.get(_order_url(event, order)).content.decode()
     # Eligible: normal link; ineligible: no link, disabled send button.
     assert "?layout=%d" % layout.pk in content
     assert "?layout=%d" % passed_layout.pk not in content
@@ -119,7 +119,7 @@ def test_order_view_enables_buttons_once_checked_in(
 ):
     with scopes_disabled():
         _check_in(pos, passed_list)
-    content = logged_in_client.get(_order_url(event, order)).rendered_content
+    content = logged_in_client.get(_order_url(event, order)).content.decode()
     assert "?layout=%d" % passed_layout.pk in content
     assert 'Not checked in on "Passed the course"' not in content
 
@@ -258,7 +258,7 @@ def test_template_page_lists_assignment_form(logged_in_client, event, layout, pa
         "plugins:pretix_attendance_certificate:layouts",
         kwargs={"organizer": event.organizer.slug, "event": event.slug},
     )
-    content = logged_in_client.get(url).rendered_content
+    content = logged_in_client.get(url).content.decode()
     assert "Passed the course" in content
     assert "Priority" not in content
 
@@ -625,10 +625,10 @@ def test_deactivated_template_can_be_reactivated(logged_in_client, event, layout
         "plugins:pretix_attendance_certificate:layouts",
         kwargs={"organizer": event.organizer.slug, "event": event.slug},
     )
-    assert "Deactivated" in logged_in_client.get(page).rendered_content
+    assert "Deactivated" in logged_in_client.get(page).content.decode()
     assert logged_in_client.post(toggle).status_code == 302
     assert _available_names(event) == ["Default"]
-    assert "Deactivated" not in logged_in_client.get(page).rendered_content
+    assert "Deactivated" not in logged_in_client.get(page).content.decode()
     # ... and it can be switched off by hand too.
     logged_in_client.post(toggle)
     assert _available_names(event) == []

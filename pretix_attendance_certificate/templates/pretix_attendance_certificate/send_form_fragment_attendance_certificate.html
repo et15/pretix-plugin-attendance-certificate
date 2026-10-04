@@ -1,11 +1,6 @@
 {% load i18n %}
 {% load bootstrap3 %}
-{% if form.checkin_lists %}
-    <p>{% trans 'This email will be sent to all attendees with an admission ticket, or only to those checked in on the selected lists.' %}</p>
-    {% bootstrap_field form.checkin_lists layout="horizontal" %}
-{% else %}
-    <p>{% trans 'This email will be sent to all attendees with an admission ticket' %}</p>
-{% endif %}
+<p>{% trans 'This email will be sent to all attendees with an admission ticket. If the template is tied to a check-in list, only to those checked in on that list.' %}</p>
 {% if form.layout %}
     {% bootstrap_field form.layout layout="horizontal" %}
     <div class="form-group">

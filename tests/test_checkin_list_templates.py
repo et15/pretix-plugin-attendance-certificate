@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 import pytest
 from django.contrib.messages import get_messages
 from django.core import mail as djmail
@@ -272,6 +274,18 @@ def _bulk_url(event):
 
 
 @pytest.fixture
+def pos_absent(order, item):
+    return OrderPosition.objects.create(
+        order=order,
+        item=item,
+        positionid=2,
+        price=13,
+        attendee_name_parts={"_legacy": "Absent Person"},
+        attendee_email="absent@dummy.test",
+    )
+
+
+@pytest.fixture
 def pos2(order, item):
     return OrderPosition.objects.create(
         order=order,
@@ -354,12 +368,26 @@ def _order_page(event, order):
 
 
 @pytest.fixture
-def self_service(event):
+def self_service(event, pos):
+    """Self-service on, the event over and the attendee checked in somewhere:
+    the baseline in which a download is allowed."""
     event.settings.set(SELF_SERVICE_SETTING, True)
+    event.date_from = now() - timedelta(days=3)
+    event.date_to = now() - timedelta(days=2)
+    event.save()
+    attendance = CheckinList.objects.create(event=event, name="Attendance")
+    _check_in(pos, attendance)
+    return attendance
 
 
 @pytest.mark.django_db
 def test_self_service_off_by_default(client, event, order, pos, layout):
+    with scopes_disabled():
+        attendance = CheckinList.objects.create(event=event, name="Attendance")
+        _check_in(pos, attendance)
+    event.date_from = now() - timedelta(days=3)
+    event.date_to = now() - timedelta(days=2)
+    event.save()
     assert client.get(_self_service_url(event, order, pos, layout)).status_code == 404
     assert "Download certificate of attendance" not in client.get(_order_page(event, order)).content.decode()
 
@@ -425,6 +453,60 @@ def test_self_service_only_for_eligible_templates(
 
 
 @pytest.mark.django_db
+def test_self_service_requires_the_event_to_be_over(
+    client, event, order, pos, layout, self_service
+):
+    event.date_to = now() + timedelta(days=1)
+    event.save()
+    assert client.get(_self_service_url(event, order, pos, layout)).status_code == 404
+    assert "Download certificate" not in client.get(_order_page(event, order)).content.decode()
+    event.date_to = now() - timedelta(hours=1)
+    event.save()
+    assert client.get(_self_service_url(event, order, pos, layout)).status_code == 200
+
+
+@pytest.mark.django_db
+def test_self_service_without_end_date_unlocks_after_the_start_day(
+    client, event, order, pos, layout, self_service
+):
+    event.date_to = None
+    event.date_from = now()  # starts today: not over until the day is
+    event.save()
+    assert client.get(_self_service_url(event, order, pos, layout)).status_code == 404
+    event.date_from = now() - timedelta(days=2)
+    event.save()
+    assert client.get(_self_service_url(event, order, pos, layout)).status_code == 200
+
+
+@pytest.mark.django_db
+def test_self_service_requires_the_attendee_to_have_been_checked_in(
+    client, event, order, pos, pos_absent, layout, self_service
+):
+    # pos was checked in by the fixture, pos_absent was not.
+    assert client.get(_self_service_url(event, order, pos, layout)).status_code == 200
+    assert client.get(_self_service_url(event, order, pos_absent, layout)).status_code == 404
+    content = client.get(_order_page(event, order)).content.decode()
+    assert _self_service_url(event, order, pos_absent, layout) not in content
+
+
+@pytest.mark.django_db
+def test_self_service_ignores_failed_checkins(
+    client, event, order, pos_absent, layout, self_service
+):
+    with scopes_disabled():
+        _check_in(pos_absent, self_service, successful=False)
+    assert client.get(_self_service_url(event, order, pos_absent, layout)).status_code == 404
+
+
+@pytest.mark.django_db
+def test_self_service_has_no_effect_on_admin_download(
+    logged_in_client, event, order, pos_absent, layout
+):
+    # Admins can always issue a certificate; the presence rule is for customers.
+    assert logged_in_client.get(_download(event, pos_absent)).status_code == 200
+
+
+@pytest.mark.django_db
 def test_self_service_hidden_when_not_eligible_for_anything(
     client, event, order, pos, passed_layout, self_service
 ):
@@ -449,3 +531,121 @@ def test_event_copy_keeps_checkin_list_assignment_and_self_service(
         assert copied.checkin_list.event == new_event
         assert copied.checkin_list.name == "Passed the course"
     assert new_event.settings.get(SELF_SERVICE_SETTING, as_type=bool)
+
+
+# --- deleting a tied check-in list deactivates the template ----------------
+
+
+def _delete_list(client, event, checkin_list):
+    # The real control view, so pretix' own deletion path is covered.
+    return client.post(
+        "/control/event/{o}/{e}/checkinlists/{pk}/delete".format(
+            o=event.organizer.slug, e=event.slug, pk=checkin_list.pk
+        )
+    )
+
+
+def _available_names(event):
+    from pretix_attendance_certificate.models import available_layouts
+
+    with scopes_disabled():
+        return [l.name for l in available_layouts(event)]
+
+
+@pytest.mark.django_db
+def test_deleting_list_deactivates_event_owned_template(
+    logged_in_client, event, layout, passed_list
+):
+    with scopes_disabled():
+        LayoutActivation.objects.create(layout=layout, event=event, checkin_list=passed_list)
+    assert _available_names(event) == ["Default"]
+
+    assert _delete_list(logged_in_client, event, passed_list).status_code == 302
+
+    # Not silently open to everyone: gone until someone reactivates it.
+    assert _available_names(event) == []
+    with scopes_disabled():
+        activation = LayoutActivation.objects.get(layout=layout, event=event)
+        assert activation.active is False
+        assert activation.checkin_list is None
+        assert event.logentry_set.filter(
+            action_type="pretix.plugins.pretix_attendance_certificate.layout.deactivated"
+        ).exists()
+
+
+@pytest.mark.django_db
+def test_deleting_list_deactivates_organizer_template(
+    logged_in_client, event, layout, passed_layout, passed_list
+):
+    assert _available_names(event) == ["Default", "Organizer-wide"]
+    _delete_list(logged_in_client, event, passed_list)
+    assert _available_names(event) == ["Default"]
+    with scopes_disabled():
+        assert not passed_layout.active_events.filter(pk=event.pk).exists()
+
+
+@pytest.mark.django_db
+def test_deleting_other_lists_changes_nothing(
+    logged_in_client, event, layout, passed_layout, passed_list
+):
+    with scopes_disabled():
+        unrelated = CheckinList.objects.create(event=event, name="Unrelated")
+    _delete_list(logged_in_client, event, unrelated)
+    assert _available_names(event) == ["Default", "Organizer-wide"]
+    with scopes_disabled():
+        assert LayoutActivation.objects.get(layout=passed_layout, event=event).checkin_list == passed_list
+
+
+@pytest.mark.django_db
+def test_deactivated_template_is_blocked_everywhere(
+    logged_in_client, client, event, order, pos, layout, passed_list, self_service
+):
+    with scopes_disabled():
+        LayoutActivation.objects.create(layout=layout, event=event, checkin_list=passed_list)
+    _delete_list(logged_in_client, event, passed_list)
+
+    response = logged_in_client.get(_download(event, pos), {"layout": layout.pk})
+    assert response.status_code == 302 and any(
+        "not available" in m for m in _messages(response)
+    )
+    assert client.get(_self_service_url(event, order, pos, layout)).status_code == 404
+
+
+@pytest.mark.django_db
+def test_deactivated_template_can_be_reactivated(logged_in_client, event, layout, passed_list):
+    with scopes_disabled():
+        LayoutActivation.objects.create(layout=layout, event=event, checkin_list=passed_list)
+    _delete_list(logged_in_client, event, passed_list)
+
+    toggle = reverse(
+        "plugins:pretix_attendance_certificate:layouts.toggle",
+        kwargs={"organizer": event.organizer.slug, "event": event.slug, "layout": layout.pk},
+    )
+    page = reverse(
+        "plugins:pretix_attendance_certificate:layouts",
+        kwargs={"organizer": event.organizer.slug, "event": event.slug},
+    )
+    assert "Deactivated" in logged_in_client.get(page).rendered_content
+    assert logged_in_client.post(toggle).status_code == 302
+    assert _available_names(event) == ["Default"]
+    assert "Deactivated" not in logged_in_client.get(page).rendered_content
+    # ... and it can be switched off by hand too.
+    logged_in_client.post(toggle)
+    assert _available_names(event) == []
+
+
+@pytest.mark.django_db
+def test_event_copy_deactivates_template_whose_list_is_missing(
+    event, layout, passed_layout, passed_list
+):
+    with scopes_disabled():
+        LayoutActivation.objects.update_or_create(
+            layout=layout, event=event, defaults={"checkin_list": passed_list}
+        )
+        new_event = _new_event(event.organizer)
+        # No "Passed the course" list in the new event.
+        event_copy_data.send(sender=new_event, other=event)
+
+        assert not passed_layout.active_events.filter(pk=new_event.pk).exists()
+        copied = new_event.attendance_certificate_layouts.get()
+        assert LayoutActivation.objects.get(layout=copied, event=new_event).active is False

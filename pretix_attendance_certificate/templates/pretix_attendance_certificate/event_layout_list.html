@@ -48,7 +48,7 @@
                 {% trans "Let attendees download their certificate from their order page" %}
             </label>
             <p class="help-block">
-                {% trans "Only paid orders; attendees only see templates they are eligible for." %}
+                {% trans "Only for paid orders, after the event is over, and only for attendees who were checked in on any check-in list. Templates tied to a check-in list additionally need a check-in on that list." %}
             </p>
         </div>
         {% if "can_change_event_settings" in request.eventpermset %}
@@ -139,7 +139,8 @@
         </tr>
         </thead>
         <tbody>
-        {% for l in event_layouts %}
+        {% for row in event_layouts %}
+            {% with l=row.layout %}
             <tr>
                 <td><strong>
                     {% if "can_change_event_settings" in request.eventpermset %}
@@ -149,9 +150,25 @@
                     {% else %}
                         {{ l.name }}
                     {% endif %}
-                </strong></td>
+                </strong>
+                    {% if not row.active %}
+                        <span class="label label-warning">{% trans "Deactivated" %}</span>
+                    {% endif %}
+                </td>
                 <td class="text-right flip">
                     {% if "can_change_event_settings" in request.eventpermset %}
+                        <form class="form-inline helper-display-inline" method="post"
+                                action="{% url "plugins:pretix_attendance_certificate:layouts.toggle" organizer=request.event.organizer.slug event=request.event.slug layout=l.pk %}">
+                            {% csrf_token %}
+                            {% if row.active %}
+                                <button class="btn btn-default btn-sm" type="submit">{% trans "Deactivate" %}</button>
+                            {% else %}
+                                <button class="btn btn-default btn-sm" type="submit"
+                                        title="{% trans "Make sure the template is tied to the right check-in list afterwards." %}">
+                                    {% trans "Reactivate" %}
+                                </button>
+                            {% endif %}
+                        </form>
                         <a href="{% url "plugins:pretix_attendance_certificate:edit" organizer=request.event.organizer.slug event=request.event.slug layout=l.pk %}"
                                 class="btn btn-default btn-sm" title="{% trans "Edit layout" %}" data-toggle="tooltip"><i class="fa fa-id-card"></i></a>
                         <a href="{% url "plugins:pretix_attendance_certificate:layouts.update" organizer=request.event.organizer.slug event=request.event.slug layout=l.pk %}"
@@ -161,6 +178,7 @@
                     {% endif %}
                 </td>
             </tr>
+            {% endwith %}
         {% empty %}
             <tr>
                 <td colspan="2">{% trans "You haven't created any event-specific templates yet." %}</td>

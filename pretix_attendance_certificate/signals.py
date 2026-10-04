@@ -1,6 +1,7 @@
 import copy
 from django.utils.translation import gettext_lazy as _
 from django.urls import resolve, reverse
+from django.db.models.signals import pre_delete
 from django.dispatch import receiver
 from django.template.loader import get_template
 from django.utils.safestring import mark_safe
@@ -18,7 +19,7 @@ from pretix.plugins.sendmail.signals import sendmail_view_classes
 from pretix.base.signals import event_copy_data, logentry_display
 from pretix.multidomain.urlreverse import eventreverse
 from pretix.presale.signals import order_info, position_info
-from pretix.base.models import OrderPosition
+from pretix.base.models import CheckinList, OrderPosition
 from pretix_attendance_certificate.models import (
     AttendanceCertificateLayout,
     LayoutActivation,
@@ -104,6 +105,31 @@ def control_nav_organizer_import(sender, request=None, organizer=None, **kwargs)
 
 
 @receiver(
+    pre_delete,
+    sender=CheckinList,
+    dispatch_uid="pretix_attendance_certificate_checkin_list_deleted",
+)
+def deactivate_templates_of_deleted_checkin_list(sender, instance, **kwargs):
+    """Safety net: a template tied to a check-in list that gets deleted must
+    not silently become available to everyone. Organizer-wide templates lose
+    their activation for the event; event-owned ones are flagged inactive
+    (they have no activation to remove) until someone re-activates them."""
+    for activation in LayoutActivation.objects.filter(
+        checkin_list=instance
+    ).select_related("layout", "event"):
+        layout, event = activation.layout, activation.event
+        if layout.organizer_id:
+            activation.delete()
+        else:
+            activation.active = False
+            activation.save(update_fields=["active"])
+        event.log_action(
+            "pretix.plugins.pretix_attendance_certificate.layout.deactivated",
+            data={"layout": layout.name, "checkin_list": instance.name},
+        )
+
+
+@receiver(
     event_copy_data, dispatch_uid="pretix_attendance_certificate_copy_data"
 )
 def copy_attendance_certificate_data(sender, other, **kwargs):
@@ -120,10 +146,19 @@ def copy_attendance_certificate_data(sender, other, **kwargs):
             if old.checkin_list
             else None
         )
+        if old.checkin_list and checkin_list is None:
+            # The counterpart list is missing in the new event: don't let the
+            # template silently become available to everyone there.
+            if new_layout.organizer_id:
+                LayoutActivation.objects.filter(
+                    layout=new_layout, event=sender
+                ).delete()
+                return
+            old.active = False
         LayoutActivation.objects.update_or_create(
             layout=new_layout,
             event=sender,
-            defaults={"checkin_list": checkin_list},
+            defaults={"checkin_list": checkin_list, "active": old.active},
         )
 
     for old_layout in other.attendance_certificate_layouts.all():
@@ -259,6 +294,18 @@ def pretix_logentry_display(sender, logentry, **kwargs):
         == "pretix.plugins.pretix_attendance_certificate.layout.deleted"
     ):
         return _("A certificate of attendance template has been deleted.")
+
+    if (
+        logentry.action_type
+        == "pretix.plugins.pretix_attendance_certificate.layout.deactivated"
+    ):
+        return _(
+            'The certificate template "{layout}" was deactivated because its '
+            'check-in list "{checkin_list}" was deleted.'
+        ).format(
+            layout=logentry.parsed_data.get("layout"),
+            checkin_list=logentry.parsed_data.get("checkin_list"),
+        )
 
     if logentry.action_type == "pretix_attendance_certificate.sendmail.sent":
         return _("The certificate of attendance has been sent out to all attendees.")

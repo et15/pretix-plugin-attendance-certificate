@@ -120,12 +120,23 @@ class LayoutActivation(models.Model):
         "pretixbase.CheckinList",
         null=True,
         blank=True,
-        on_delete=models.CASCADE,
+        # Deleting the list must never widen who is eligible: a pre_delete
+        # hook (see signals.py) deactivates the template before this runs.
+        on_delete=models.SET_NULL,
         related_name="+",
         verbose_name=_("Check-in list"),
         help_text=_(
             "Only attendees checked in on this list are eligible for the "
             "template. Leave empty to make it available to everyone."
+        ),
+    )
+
+    active = models.BooleanField(
+        default=True,
+        verbose_name=_("Active"),
+        help_text=_(
+            "Deactivated templates are not offered for this event. This is "
+            "set automatically when the tied check-in list is deleted."
         ),
     )
 
@@ -135,11 +146,14 @@ class LayoutActivation(models.Model):
 
 def available_layouts(event):
     """Layouts actually usable for rendering a certificate for this event:
-    its own layouts plus organizer-wide ones explicitly activated for it."""
+    its own layouts plus organizer-wide ones explicitly activated for it, minus
+    any that were deactivated."""
+    deactivated = LayoutActivation.objects.filter(event=event, active=False)
     return (
         AttendanceCertificateLayout.objects.filter(
             Q(event=event) | Q(organizer=event.organizer, active_events=event)
         )
+        .exclude(pk__in=deactivated.values("layout_id"))
         .order_by("name", "pk")
         .distinct()
     )

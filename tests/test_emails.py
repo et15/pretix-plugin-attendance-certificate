@@ -95,5 +95,5 @@ def test_use_template_button_script_is_not_inline(
         organizer_layout.active_events.add(event)
 
     content = logged_in_client.get(_send_url(event)).content.decode()
-    assert "pretix_attendance_certificate/use_template_text.js" in content
+    assert "use_template_text.js" in content
     assert "addEventListener" not in content

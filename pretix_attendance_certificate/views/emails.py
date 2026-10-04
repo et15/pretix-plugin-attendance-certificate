@@ -1,4 +1,7 @@
+import logging
+
 from django import forms
+from django.templatetags.static import static
 from django.urls import reverse
 from django.template.loader import get_template
 from django.contrib.humanize.templatetags.humanize import intcomma
@@ -10,6 +13,8 @@ from pretix.base.models import OrderPosition, Order
 
 from pretix_attendance_certificate.models import available_layouts
 from pretix_attendance_certificate.tasks import send_certificate_of_attendance_mails
+
+logger = logging.getLogger(__name__)
 
 
 class CertificateEmailForm(BaseMailForm):
@@ -90,6 +95,19 @@ class SendCertificateEmailView(BaseSenderView):
             }
             for layout in available_layouts(self.request.event)
         }
+        # Plugin static files are only in pretix's staticfiles manifest after
+        # `pretix rebuild`/collectstatic. Don't turn a missing entry into a
+        # 500 for the whole send page - the button just stays inactive.
+        try:
+            ctx["use_template_text_js"] = static(
+                "pretix_attendance_certificate/use_template_text.js"
+            )
+        except ValueError:
+            logger.warning(
+                "use_template_text.js is missing from the staticfiles manifest; "
+                "run `pretix rebuild` to enable the template email text button."
+            )
+            ctx["use_template_text_js"] = None
         return ctx
 
     @classmethod

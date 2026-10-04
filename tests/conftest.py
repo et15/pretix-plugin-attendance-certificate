@@ -115,3 +115,15 @@ def logged_in_client(client, event):
     team.limit_events.add(event)
     client.force_login(user)
     return client
+
+
+@pytest.fixture
+def organizer_client(client, event):
+    user = User.objects.create_user("orgadmin@dummy.dummy", "orgadmin")
+    team = Team.objects.create(
+        organizer=event.organizer,
+        can_change_organizer_settings=True,
+    )
+    team.members.add(user)
+    client.force_login(user)
+    return client

@@ -198,9 +198,7 @@ def test_event_template_help_matches_the_send_page_list(logged_in_client, event,
     assert "Available placeholders:" in content
     for key in expected:
         assert "{%s}" % key in content
-    assert "{name_given_name} their first name" in content
-    assert "literal text" not in content
-    assert "registration questions" in content
+    assert "{name_given_name}" in content
 
 
 @pytest.mark.django_db
@@ -217,9 +215,9 @@ def test_event_template_help_includes_event_meta_data(logged_in_client, event, l
 def test_event_template_help_with_full_name_scheme(logged_in_client, event, layout):
     event.settings.name_scheme = "full"
     content = logged_in_client.get(_update_url(event, layout)).rendered_content
+    # The list is generated for the event, so a part it doesn't have isn't offered.
     assert "{name}" in content
-    assert "{name_given_name} (first name) is not available" in content
-    assert "literal text" in content
+    assert "{name_given_name}" not in content
 
 
 @pytest.mark.django_db

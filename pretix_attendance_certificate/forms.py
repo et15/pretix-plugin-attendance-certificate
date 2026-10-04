@@ -20,10 +20,17 @@ def placeholder_help(event=None):
     )
     if event is None:
         parts = _(
-            " First and last name are available when an event collects the name "
-            "in parts, e.g. {name_given_name} and {name_family_name}."
+            " Heads-up: {name_given_name} (first name) and {name_family_name} "
+            "(last name) only exist for events that collect the name in parts. "
+            "For any other event they are sent as literal text, so use {name} "
+            "if the template is shared between events."
         )
     else:
+        labels = {
+            "{name_given_name}": _("first name"),
+            "{name_family_name}": _("last name"),
+            "{name_title}": _("title"),
+        }
         names = sorted(
             "{%s}" % key
             for key in get_available_placeholders(
@@ -32,11 +39,17 @@ def placeholder_help(event=None):
             if key.startswith("name_") and key != "name_for_salutation"
         )
         if names:
-            parts = _(" This event's name parts (e.g. first and last name): {names}.").format(
-                names=", ".join(names)
+            parts = _(" Name parts of this event: {names}.").format(
+                names=", ".join(
+                    "%s (%s)" % (n, labels[n]) if n in labels else n for n in names
+                )
             )
         else:
-            parts = _(" This event only collects a full name, so only {name} is available.")
+            parts = _(
+                " Heads-up: this event only collects a full name, so "
+                "{name_given_name} (first name) is not available here - it would "
+                "be sent as literal text. Use {name}."
+            )
     note = _(
         " Answers to registration questions are not available here - put them "
         "on the certificate itself in the layout editor."

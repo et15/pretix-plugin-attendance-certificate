@@ -58,6 +58,20 @@ def layout(event):
 
 
 @pytest.fixture
+def organizer_layout(event):
+    return AttendanceCertificateLayout.objects.create(
+        organizer=event.organizer, name="Organizer-wide"
+    )
+
+
+@pytest.fixture
+def second_organizer_layout(event):
+    return AttendanceCertificateLayout.objects.create(
+        organizer=event.organizer, name="Organizer-wide 2"
+    )
+
+
+@pytest.fixture
 def item(event):
     return Item.objects.create(
         name="Test item", event=event, default_price=13, admission=True

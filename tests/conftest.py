@@ -124,6 +124,10 @@ def organizer_client(client, event):
     team = Team.objects.create(
         organizer=event.organizer,
         can_change_organizer_settings=True,
+        # An organizer admin also manages the events' pages in these tests; pretix
+        # 2026 no longer implies event permissions from organizer ones.
+        can_view_orders=True,
+        can_change_event_settings=True,
         all_events=True,
     )
     team.members.add(user)

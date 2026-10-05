@@ -21,4 +21,11 @@ CA certificates (e.g. the root) contained in an imported `.p12` are stored and
 embedded in every signature. Readers still trust only a root the recipient has
 imported themselves.
 
+Optionally every signature gets a trusted timestamp (RFC 3161) from a timestamp
+server of your choice, which keeps it verifiable after your certificate has
+expired. Choose what happens if the server is unreachable: *if possible* signs
+without a timestamp and logs a warning, *required* refuses to create the
+certificate (a running mail send stops). A server that failed is skipped for
+60 seconds, so a bulk send doesn't wait for timeouts on every PDF.
+
 The private key is stored unencrypted in the pretix database.

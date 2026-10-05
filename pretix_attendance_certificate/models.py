@@ -98,6 +98,12 @@ class AttendanceCertificateLayout(LoggedModel):
         return cls.objects.filter(Q(event=event) | Q(organizer=event.organizer))
 
 
+class TimestampMode(models.TextChoices):
+    OFF = "off", _("Off")
+    OPTIONAL = "optional", _("On, if possible (sign without if unreachable)")
+    REQUIRED = "required", _("On, required (fail if unreachable)")
+
+
 class OrganizerSigningCertificate(models.Model):
     """The organizer-wide certificate used to digitally sign every certificate
     of attendance of the organizer's events (PAdES, see signing.py).
@@ -130,6 +136,30 @@ class OrganizerSigningCertificate(models.Model):
         default="Certificate of attendance",
         verbose_name=_("Reason"),
         help_text=_("Stored in the signature, shown by PDF readers."),
+    )
+    timestamp_mode = models.CharField(
+        max_length=16,
+        choices=TimestampMode.choices,
+        default=TimestampMode.OFF,
+        verbose_name=_("Trusted timestamp"),
+        help_text=_(
+            "A timestamp from an independent time stamping authority (RFC 3161) "
+            "proves when a certificate was signed and keeps the signature "
+            "verifiable after your certificate expires. If the authority is "
+            "unreachable, \"if possible\" signs without a timestamp and logs a "
+            "warning, \"required\" refuses to create the certificate (e.g. "
+            "the mail run stops)."
+        ),
+    )
+    timestamp_url = models.URLField(
+        max_length=255,
+        blank=True,
+        verbose_name=_("Timestamp server URL"),
+        help_text=_(
+            "Address of the time stamping authority, e.g. "
+            "http://timestamp.digicert.com or http://timestamp.sectigo.com. "
+            "Only a hash of the signature is sent, never the document."
+        ),
     )
     created = models.DateTimeField(auto_now_add=True)
 

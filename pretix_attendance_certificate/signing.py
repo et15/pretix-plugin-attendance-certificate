@@ -10,9 +10,17 @@ reader's trusted certificates - that's expected and the integrity check
 ("document has not been modified since it was signed") works regardless.
 """
 
+import asyncio
 import datetime
+import logging
+import socket
+import time
 from dataclasses import dataclass
 from io import BytesIO
+from urllib.parse import urlparse
+
+import requests
+from asn1crypto import tsp
 
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
@@ -22,13 +30,33 @@ from cryptography.x509.oid import NameOID
 from pyhanko.keys import load_certs_from_pemder_data, load_private_key_from_pemder_data
 from pyhanko.pdf_utils.incremental_writer import IncrementalPdfFileWriter
 from pyhanko.sign import fields, signers
+from pyhanko.sign.timestamps import TimestampRequestError, TimeStamper
 from pyhanko_certvalidator.registry import SimpleCertificateStore
 
-from pretix_attendance_certificate.models import OrganizerSigningCertificate
+from pretix.helpers.ssrf import should_block_access
+
+from pretix_attendance_certificate.models import (
+    OrganizerSigningCertificate,
+    TimestampMode,
+)
+
+logger = logging.getLogger(__name__)
+
+TSA_TIMEOUT = 5  # seconds per request
+TSA_ATTEMPTS = 2  # tries per certificate before giving up
+TSA_RETRY_PAUSE = 1  # seconds between tries
+# After a failed run the authority counts as down for this long, so a bulk
+# send doesn't wait for timeouts on every single PDF.
+TSA_COOLDOWN = 60
+_tsa_down_until = {}
 
 
 class InvalidCertificate(ValueError):
     pass
+
+
+class TimestampError(Exception):
+    """The timestamp authority could not be reached or answered badly."""
 
 
 @dataclass
@@ -167,16 +195,122 @@ def _signer(signing: OrganizerSigningCertificate):
     )
 
 
-def sign_pdf(pdf: bytes, signing: OrganizerSigningCertificate) -> bytes:
-    """Returns pdf with an invisible PAdES signature added."""
+class RequestsTimeStamper(TimeStamper):
+    """RFC 3161 client on top of ``requests``. pretix guards its urllib3 /
+    requests traffic against requests to internal networks (SSRF); pyHanko's
+    own aiohttp client would bypass that."""
+
+    def __init__(self, url, timeout=TSA_TIMEOUT):
+        self.url = url
+        self.timeout = timeout
+        super().__init__()
+
+    def _post(self, data: bytes) -> bytes:
+        response = requests.post(
+            self.url,
+            data=data,
+            headers={
+                "Content-Type": "application/timestamp-query",
+                "Accept": "application/timestamp-reply",
+            },
+            timeout=self.timeout,
+            allow_redirects=False,
+        )
+        response.raise_for_status()
+        if response.headers.get("Content-Type") != "application/timestamp-reply":
+            raise TimestampRequestError("Timestamp server response is malformed.")
+        return response.content
+
+    async def async_request_tsa_response(self, req):
+        data = await asyncio.to_thread(self._post, req.dump())
+        return tsp.TimeStampResp.load(data)
+
+    async def async_timestamp(self, message_digest, md_algorithm):
+        # Whatever goes wrong on the authority's side (network, HTTP, garbage
+        # in the answer, a refusal) surfaces as one error type, so signing
+        # problems of our own are never mistaken for an unreachable TSA.
+        try:
+            return await super().async_timestamp(message_digest, md_algorithm)
+        except TimestampRequestError:
+            raise
+        except Exception as e:
+            raise TimestampRequestError("Timestamp service failed") from e
+
+
+def validate_timestamp_url(url):
+    """Raises ValueError for anything but a public http(s) address."""
+    parsed = urlparse(url)
+    if parsed.scheme not in ("http", "https") or not parsed.hostname:
+        raise ValueError("Only http(s) addresses are allowed.")
+    try:
+        infos = socket.getaddrinfo(parsed.hostname, parsed.port or 443)
+    except OSError:
+        raise ValueError("The host name could not be resolved.")
+    for info in infos:
+        if should_block_access(info[4])[0]:
+            raise ValueError("Addresses in internal networks are not allowed.")
+
+
+_timestampers = {}
+
+
+def _timestamper(signing: OrganizerSigningCertificate):
+    if signing.timestamp_mode == TimestampMode.OFF or not signing.timestamp_url:
+        return None
+    # One client per URL: pyHanko sizes the signature with a dummy timestamp
+    # request that it caches per client, so reusing the client means only the
+    # first PDF of a process costs this extra request.
+    url = signing.timestamp_url
+    if url not in _timestampers:
+        _timestampers[url] = RequestsTimeStamper(url)
+    return _timestampers[url]
+
+
+def _sign(pdf, signing, timestamper):
     writer = IncrementalPdfFileWriter(BytesIO(pdf))
     metadata = signers.PdfSignatureMetadata(
         field_name="Signature1",
         reason=signing.reason or None,
         subfilter=fields.SigSeedSubFilter.PADES,
     )
-    out = signers.PdfSigner(metadata, signer=_signer(signing)).sign_pdf(writer)
-    return out.read()
+    pdf_signer = signers.PdfSigner(
+        metadata, signer=_signer(signing), timestamper=timestamper
+    )
+    return pdf_signer.sign_pdf(writer).read()
+
+
+def sign_pdf(pdf: bytes, signing: OrganizerSigningCertificate) -> bytes:
+    """Returns pdf with an invisible PAdES signature added (with a trusted
+    timestamp if configured; see OrganizerSigningCertificate.timestamp_mode
+    for what happens when the authority fails)."""
+    timestamper = _timestamper(signing)
+    if timestamper is None:
+        return _sign(pdf, signing, None)
+
+    url = signing.timestamp_url
+    error = None
+    if time.monotonic() < _tsa_down_until.get(url, 0):
+        error = TimestampRequestError("Timestamp server was unreachable just now")
+    else:
+        for attempt in range(TSA_ATTEMPTS):
+            try:
+                signed = _sign(pdf, signing, timestamper)
+                _tsa_down_until.pop(url, None)
+                return signed
+            except TimestampRequestError as e:
+                error = e
+                if attempt + 1 < TSA_ATTEMPTS:
+                    time.sleep(TSA_RETRY_PAUSE)
+        _tsa_down_until[url] = time.monotonic() + TSA_COOLDOWN
+
+    if signing.timestamp_mode == TimestampMode.REQUIRED:
+        raise TimestampError(
+            "Could not get a trusted timestamp from {}: {}".format(url, error)
+        ) from error
+    logger.warning(
+        "Signing without timestamp, timestamp server %s failed: %s", url, error
+    )
+    return _sign(pdf, signing, None)
 
 
 def signing_for(organizer):

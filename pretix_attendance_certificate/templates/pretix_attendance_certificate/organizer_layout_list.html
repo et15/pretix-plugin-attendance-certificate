@@ -31,9 +31,15 @@
         {% for row in layouts %}
             <tr>
                 <td><strong>
-                    <a href="{% url "plugins:pretix_attendance_certificate:organizer.layouts.update" organizer=request.organizer.slug layout=row.layout.pk %}">
-                        {{ row.layout.name }}
-                    </a>
+                    {% if anchor_event %}
+                        <a href="{% url "plugins:pretix_attendance_certificate:edit" organizer=request.organizer.slug event=anchor_event.slug layout=row.layout.pk %}">
+                            {{ row.layout.name }}
+                        </a>
+                    {% else %}
+                        <a href="{% url "plugins:pretix_attendance_certificate:organizer.layouts.update" organizer=request.organizer.slug layout=row.layout.pk %}">
+                            {{ row.layout.name }}
+                        </a>
+                    {% endif %}
                 </strong></td>
                 <td>
                     {% if row.active_events %}

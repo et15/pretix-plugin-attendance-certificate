@@ -2,7 +2,7 @@ from django.contrib import messages
 from django.http import HttpResponse
 from django.shortcuts import redirect
 from django.urls import reverse
-from django.utils.translation import gettext_lazy as _
+from django.utils.translation import gettext, gettext_lazy as _
 from django.views.generic import TemplateView, View
 
 from pretix.control.permissions import OrganizerPermissionRequiredMixin
@@ -61,15 +61,17 @@ class SigningView(SigningMixin, TemplateView):
 
     def _store(self, certificate_pem, private_key_pem, chain_pem=""):
         check_pair(certificate_pem, private_key_pem)
-        obj, _created = OrganizerSigningCertificate.objects.update_or_create(
+        obj = self.get_current() or OrganizerSigningCertificate(
             organizer=self.request.organizer,
-            defaults={
-                "certificate_pem": certificate_pem,
-                "private_key_pem": private_key_pem,
-                "chain_pem": chain_pem,
-                "enabled": True,
-            },
+            # Shown by PDF readers; only preset for new certificates so that a
+            # reason the organizer has edited survives replacing the certificate.
+            reason=gettext("Certificate of attendance"),
         )
+        obj.certificate_pem = certificate_pem
+        obj.private_key_pem = private_key_pem
+        obj.chain_pem = chain_pem
+        obj.enabled = True
+        obj.save()
         self.request.organizer.log_action(
             LOG_ACTION,
             user=self.request.user,

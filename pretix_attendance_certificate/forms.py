@@ -6,8 +6,13 @@ from pretix.plugins.sendmail.forms import FormPlaceholderMixin
 from pretix_attendance_certificate.models import (
     AttendanceCertificateLayout,
     OrganizerSigningCertificate,
+    TimestampMode,
 )
-from pretix_attendance_certificate.signing import InvalidCertificate, load_pkcs12
+from pretix_attendance_certificate.signing import (
+    InvalidCertificate,
+    load_pkcs12,
+    validate_timestamp_url,
+)
 
 # Organizer-wide templates have no single event to ask which placeholders
 # exist, so they get a general note instead of the generated list.
@@ -60,7 +65,24 @@ class OrganizerLayoutForm(FormPlaceholderMixin, forms.ModelForm):
 class SigningSettingsForm(forms.ModelForm):
     class Meta:
         model = OrganizerSigningCertificate
-        fields = ["enabled", "reason"]
+        fields = ["enabled", "reason", "timestamp_mode", "timestamp_url"]
+
+    def clean(self):
+        data = super().clean()
+        mode = data.get("timestamp_mode")
+        url = data.get("timestamp_url")
+        if mode and mode != TimestampMode.OFF:
+            if not url:
+                self.add_error(
+                    "timestamp_url",
+                    _("Please enter the address of a timestamp server."),
+                )
+            else:
+                try:
+                    validate_timestamp_url(url)
+                except ValueError as e:
+                    self.add_error("timestamp_url", str(e))
+        return data
 
 
 class GenerateCertificateForm(forms.Form):

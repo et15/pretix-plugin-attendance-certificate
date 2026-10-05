@@ -65,7 +65,7 @@ def test_use_template_button_hidden_with_single_candidate(
     logged_in_client, event, order, pos, layout
 ):
     response = logged_in_client.get(_send_url(event))
-    assert "Use this template's email text" not in response.rendered_content
+    assert "Use this template's email text" not in response.content.decode()
 
 
 @pytest.mark.django_db
@@ -79,7 +79,7 @@ def test_use_template_button_and_data_shown_with_multiple_candidates(
         organizer_layout.save()
 
     response = logged_in_client.get(_send_url(event))
-    content = response.rendered_content
+    content = response.content.decode()
     assert "Use this template's email text" in content
     assert "Org subject" in content
     assert "Org body" in content
@@ -94,7 +94,7 @@ def test_use_template_button_script_is_not_inline(
     with scopes_disabled():
         organizer_layout.active_events.add(event)
 
-    content = logged_in_client.get(_send_url(event)).rendered_content
+    content = logged_in_client.get(_send_url(event)).content.decode()
     assert "use_template_text.js" in content
     assert "addEventListener" not in content
 
@@ -134,7 +134,7 @@ def test_form_has_no_checkin_list_selector(
 ):
     # The check-in list is bound to the template, so the send form must not
     # offer a second, competing way to pick it.
-    content = logged_in_client.get(_send_url(event)).rendered_content
+    content = logged_in_client.get(_send_url(event)).content.decode()
     assert "checkin_lists" not in content
     assert "Restrict to recipients with check-in on list" not in content
 
@@ -168,6 +168,12 @@ def test_history_shows_checkin_list_of_older_entries(
                 "checkin_lists": [{"id": passed_list.pk, "name": "x"}],
             },
         )
-    response = logged_in_client.get(_send_url(event))
+    # The history lives on pretix' own "Email history" page, not on the send form.
+    response = logged_in_client.get(
+        reverse(
+            "plugins:sendmail:history",
+            kwargs={"organizer": event.organizer.slug, "event": event.slug},
+        )
+    )
     assert response.status_code == 200
-    assert "Passed the course" in response.rendered_content
+    assert "Passed the course" in response.content.decode()

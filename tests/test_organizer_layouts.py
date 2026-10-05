@@ -1,3 +1,5 @@
+import re
+
 import pytest
 from django.test import RequestFactory
 from django.urls import reverse
@@ -52,6 +54,13 @@ def _editor_url(event, layout):
 def test_list_links_to_editor_via_anchor_event(organizer_client, event, organizer_layout):
     response = organizer_client.get(_list_url(event))
     assert _editor_url(event, organizer_layout) in response.rendered_content
+
+
+@pytest.mark.django_db
+def test_list_name_links_to_editor(organizer_client, event, organizer_layout):
+    content = organizer_client.get(_list_url(event)).rendered_content
+    pattern = rf'<strong>\s*<a href="{re.escape(_editor_url(event, organizer_layout))}">\s*{re.escape(organizer_layout.name)}'
+    assert re.search(pattern, content)
 
 
 @pytest.mark.django_db

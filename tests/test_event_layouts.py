@@ -1,3 +1,5 @@
+import re
+
 import pytest
 from django.urls import reverse
 from django_scopes import scopes_disabled
@@ -65,6 +67,13 @@ def _editor_url(event, layout):
     )
 
 
+def _organizer_update_url(event, layout):
+    return reverse(
+        "plugins:pretix_attendance_certificate:organizer.layouts.update",
+        kwargs={"organizer": event.organizer.slug, "layout": layout.pk},
+    )
+
+
 @pytest.mark.django_db
 def test_list_shows_both_scopes(logged_in_client, event, layout, organizer_layout):
     response = logged_in_client.get(_list_url(event))
@@ -72,6 +81,32 @@ def test_list_shows_both_scopes(logged_in_client, event, layout, organizer_layou
     assert layout.name in response.rendered_content
     assert organizer_layout.name in response.rendered_content
     assert "Inactive - click to activate" in response.rendered_content
+
+
+@pytest.mark.django_db
+def test_list_offers_design_and_mail_text_buttons_for_organizer_layouts(
+    organizer_client, event, organizer_layout
+):
+    content = organizer_client.get(_list_url(event)).rendered_content
+    assert _editor_url(event, organizer_layout) in content
+    assert _organizer_update_url(event, organizer_layout) in content
+
+
+@pytest.mark.django_db
+def test_list_names_link_to_editor(organizer_client, event, layout, organizer_layout):
+    content = organizer_client.get(_list_url(event)).rendered_content
+    for lay in (layout, organizer_layout):
+        pattern = rf'<a href="{re.escape(_editor_url(event, lay))}">\s*{re.escape(lay.name)}\s*</a>'
+        assert re.search(pattern, content)
+
+
+@pytest.mark.django_db
+def test_list_hides_organizer_layout_buttons_without_organizer_permission(
+    logged_in_client, event, organizer_layout
+):
+    content = logged_in_client.get(_list_url(event)).rendered_content
+    assert _editor_url(event, organizer_layout) not in content
+    assert _organizer_update_url(event, organizer_layout) not in content
 
 
 @pytest.mark.django_db

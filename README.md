@@ -4,6 +4,16 @@ Plugin to create and send the certificate of attendance to attendees.
 
 Used by https://pycon.it
 
+## Formatting in text fields
+
+The free text of a text field in the template editor supports inline Markdown:
+`**bold**`, `*italic*`, `***both***`, `~~strikethrough~~` and `++underline++`
+(`__bold__` and `_italic_` work as well). A backslash escapes a marker, e.g.
+`\*`. A marker pair has to open and close on the same line. Placeholders such as `{attendee_name}` are never interpreted as Markdown, so
+attendee-supplied data can't change the layout. The editor's own on-canvas
+preview shows the raw markers; the *Preview* PDF and the real certificates are
+formatted.
+
 ## Digital signature
 
 Organizers can sign all certificates of attendance with a certificate of their

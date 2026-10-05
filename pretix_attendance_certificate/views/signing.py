@@ -16,6 +16,7 @@ from pretix_attendance_certificate.forms import (
 from pretix_attendance_certificate.models import OrganizerSigningCertificate
 from pretix_attendance_certificate.signing import (
     certificate_info,
+    chain_info,
     check_pair,
     generate_self_signed,
 )
@@ -46,6 +47,7 @@ class SigningView(SigningMixin, TemplateView):
         current = self.get_current()
         ctx["current"] = current
         ctx["info"] = certificate_info(current.certificate_pem) if current else None
+        ctx["chain"] = chain_info(current.chain_pem) if current else []
         ctx["settings_form"] = kwargs.get("settings_form") or (
             SigningSettingsForm(instance=current) if current else None
         )
@@ -57,13 +59,14 @@ class SigningView(SigningMixin, TemplateView):
         )
         return ctx
 
-    def _store(self, certificate_pem, private_key_pem):
+    def _store(self, certificate_pem, private_key_pem, chain_pem=""):
         check_pair(certificate_pem, private_key_pem)
         obj, _created = OrganizerSigningCertificate.objects.update_or_create(
             organizer=self.request.organizer,
             defaults={
                 "certificate_pem": certificate_pem,
                 "private_key_pem": private_key_pem,
+                "chain_pem": chain_pem,
                 "enabled": True,
             },
         )

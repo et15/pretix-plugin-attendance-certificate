@@ -96,16 +96,18 @@ def generate_self_signed(common_name, organization="", valid_days=5 * 365):
 
 
 def load_pkcs12(data, password=None):
-    """Returns (certificate_pem, private_key_pem) from a .p12/.pfx file."""
+    """Returns (certificate_pem, private_key_pem, chain_pem) from a .p12/.pfx
+    file. chain_pem holds the file's further certificates (CA chain), if any."""
     try:
-        key, cert, _extra = pkcs12.load_key_and_certificates(
+        key, cert, extra = pkcs12.load_key_and_certificates(
             data, password.encode() if password else None
         )
     except (ValueError, TypeError) as e:
         raise InvalidCertificate(str(e))
     if key is None or cert is None:
         raise InvalidCertificate("The file does not contain a key and a certificate.")
-    return _pem_certificate(cert), _pem_private_key(key)
+    chain = "".join(_pem_certificate(c) for c in extra or [] if c != cert)
+    return _pem_certificate(cert), _pem_private_key(key), chain
 
 
 def certificate_info(certificate_pem):
@@ -134,7 +136,26 @@ def check_pair(certificate_pem, private_key_pem):
         raise InvalidCertificate("The private key does not match the certificate.")
 
 
+def chain_info(chain_pem):
+    return [
+        certificate_info(pem)
+        for pem in _split_pem(chain_pem)
+    ]
+
+
+def _split_pem(pem):
+    marker = "-----END CERTIFICATE-----"
+    return [part + marker for part in pem.split(marker) if part.strip()]
+
+
 def _signer(signing: OrganizerSigningCertificate):
+    # The CA chain is embedded in the signature, so a reader can build the path
+    # to the root. (It still only trusts a root the recipient has imported.)
+    chain = (
+        list(load_certs_from_pemder_data(signing.chain_pem.encode()))
+        if signing.chain_pem
+        else []
+    )
     return signers.SimpleSigner(
         signing_cert=next(
             iter(load_certs_from_pemder_data(signing.certificate_pem.encode()))
@@ -142,7 +163,7 @@ def _signer(signing: OrganizerSigningCertificate):
         signing_key=load_private_key_from_pemder_data(
             signing.private_key_pem.encode(), passphrase=None
         ),
-        cert_registry=SimpleCertificateStore(),
+        cert_registry=SimpleCertificateStore.from_certs(chain),
     )
 
 

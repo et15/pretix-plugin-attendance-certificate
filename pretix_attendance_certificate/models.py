@@ -113,6 +113,9 @@ class OrganizerSigningCertificate(models.Model):
     )
     certificate_pem = models.TextField()
     private_key_pem = models.TextField()
+    # Further certificates of the chain (intermediate/root CA) from an imported
+    # .p12, PEM concatenated. Embedded into every signature.
+    chain_pem = models.TextField(blank=True, default="")
     enabled = models.BooleanField(
         default=True,
         verbose_name=_("Sign certificates of attendance"),

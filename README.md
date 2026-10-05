@@ -17,4 +17,8 @@ public certificate (downloadable on the same page) is added to their trusted
 certificates. Publish it together with its SHA-256 fingerprint, e.g. on your
 website. Later modifications of a signed PDF are detected regardless.
 
+CA certificates (e.g. the root) contained in an imported `.p12` are stored and
+embedded in every signature. Readers still trust only a root the recipient has
+imported themselves.
+
 The private key is stored unencrypted in the pretix database.

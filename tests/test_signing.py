@@ -84,7 +84,8 @@ def test_pkcs12_roundtrip(keypair):
     data = pkcs12.serialize_key_and_certificates(
         b"x", key, cert, None, serialization.BestAvailableEncryption(b"secret")
     )
-    cert_pem, key_pem = signing.load_pkcs12(data, "secret")
+    cert_pem, key_pem, chain = signing.load_pkcs12(data, "secret")
+    assert chain == ""
     signing.check_pair(cert_pem, key_pem)
     with pytest.raises(signing.InvalidCertificate):
         signing.load_pkcs12(data, "wrong")
@@ -186,3 +187,102 @@ def test_signing_page_requires_organizer_permission(client, event):
     client.force_login(user)
     assert client.get(_url(event)).status_code != 200
     assert client.post(_url(event), {"action": "delete"}).status_code != 200
+
+
+def _ca_chain_p12():
+    """Root CA -> leaf, returned as .p12 bytes with the root included."""
+    import datetime
+
+    from cryptography import x509
+    from cryptography.hazmat.primitives import hashes, serialization
+    from cryptography.hazmat.primitives.asymmetric import rsa
+    from cryptography.hazmat.primitives.serialization import pkcs12
+    from cryptography.x509.oid import NameOID
+
+    now = datetime.datetime.now(datetime.timezone.utc)
+
+    def make(cn, issuer_name, issuer_key, ca):
+        key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+        name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, cn)])
+        cert = (
+            x509.CertificateBuilder()
+            .subject_name(name)
+            .issuer_name(issuer_name or name)
+            .public_key(key.public_key())
+            .serial_number(x509.random_serial_number())
+            .not_valid_before(now - datetime.timedelta(minutes=5))
+            .not_valid_after(now + datetime.timedelta(days=30))
+            .add_extension(x509.BasicConstraints(ca=ca, path_length=0 if ca else None), True)
+            .add_extension(
+                x509.KeyUsage(
+                    digital_signature=not ca,
+                    content_commitment=not ca,
+                    key_encipherment=False,
+                    data_encipherment=False,
+                    key_agreement=False,
+                    key_cert_sign=ca,
+                    crl_sign=ca,
+                    encipher_only=False,
+                    decipher_only=False,
+                ),
+                True,
+            )
+            .sign(issuer_key or key, hashes.SHA256())
+        )
+        return key, cert
+
+    root_key, root = make("Test Root CA", None, None, True)
+    leaf_key, leaf = make("Test Leaf", root.subject, root_key, False)
+    return pkcs12.serialize_key_and_certificates(
+        b"x", leaf_key, leaf, [root], serialization.NoEncryption()
+    ), root
+
+
+def test_pkcs12_chain_is_kept():
+    data, root = _ca_chain_p12()
+    cert_pem, _key, chain = signing.load_pkcs12(data)
+    assert cert_pem.count("BEGIN CERTIFICATE") == 1
+    assert chain.count("BEGIN CERTIFICATE") == 1
+    assert "Test Root CA" in signing.chain_info(chain)[0].subject
+
+
+@pytest.mark.django_db
+def test_ca_chain_is_embedded_in_signed_pdf(event, pos, layout):
+    from cryptography.hazmat.primitives import serialization
+
+    data, root = _ca_chain_p12()
+    cert_pem, key_pem, chain = signing.load_pkcs12(data)
+    with scopes_disabled():
+        OrganizerSigningCertificate.objects.create(
+            organizer=event.organizer,
+            certificate_pem=cert_pem,
+            private_key_pem=key_pem,
+            chain_pem=chain,
+        )
+        pdf = render_certificate(position=pos, event=event, layout=layout).read()
+    sig = PdfFileReader(BytesIO(pdf)).embedded_signatures[0]
+    names = sorted(
+        c.native["tbs_certificate"]["subject"]["common_name"]
+        for c in sig.signed_data["certificates"]
+    )
+    assert names == ["Test Leaf", "Test Root CA"]
+    # ...and with the root as trust anchor the whole chain validates.
+    root_pem = root.public_bytes(serialization.Encoding.PEM).decode()
+    status = _validate(pdf, root_pem)
+    assert status.intact and status.valid and status.trusted
+
+
+@pytest.mark.django_db
+def test_import_via_ui_stores_chain(organizer_client, event):
+    from django.core.files.uploadedfile import SimpleUploadedFile
+
+    data, _root = _ca_chain_p12()
+    response = organizer_client.post(
+        _url(event),
+        {"action": "import", "import-pkcs12": SimpleUploadedFile("a.p12", data)},
+    )
+    assert response.status_code == 302
+    with scopes_disabled():
+        cfg = OrganizerSigningCertificate.objects.get()
+    assert cfg.chain_pem.count("BEGIN CERTIFICATE") == 1
+    assert "Test Root CA" in organizer_client.get(_url(event)).content.decode()

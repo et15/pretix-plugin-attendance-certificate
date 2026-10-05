@@ -21,6 +21,7 @@ from urllib.parse import urlparse
 
 import requests
 from asn1crypto import tsp
+from django.utils.translation import gettext as _
 
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
@@ -241,14 +242,14 @@ def validate_timestamp_url(url):
     """Raises ValueError for anything but a public http(s) address."""
     parsed = urlparse(url)
     if parsed.scheme not in ("http", "https") or not parsed.hostname:
-        raise ValueError("Only http(s) addresses are allowed.")
+        raise ValueError(_("Only http(s) addresses are allowed."))
     try:
         infos = socket.getaddrinfo(parsed.hostname, parsed.port or 443)
     except OSError:
-        raise ValueError("The host name could not be resolved.")
+        raise ValueError(_("The host name could not be resolved."))
     for info in infos:
         if should_block_access(info[4])[0]:
-            raise ValueError("Addresses in internal networks are not allowed.")
+            raise ValueError(_("Addresses in internal networks are not allowed."))
 
 
 _timestampers = {}

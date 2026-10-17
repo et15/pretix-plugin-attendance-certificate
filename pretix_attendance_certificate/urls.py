@@ -17,6 +17,7 @@ from .views.organizer import (
 )
 from .views.positions import DownloadCertificateView, SendCertificateView
 from .views.presale import SelfServiceDownloadView
+from .views.signing import SigningCertificateDownloadView, SigningView
 
 urlpatterns = [
     re_path(
@@ -73,6 +74,16 @@ urlpatterns = [
         r"^control/organizer/(?P<organizer>[^/]+)/attendance-certificate/templates/(?P<layout>\d+)/delete$",
         OrganizerLayoutDeleteView.as_view(),
         name="organizer.layouts.delete",
+    ),
+    re_path(
+        r"^control/organizer/(?P<organizer>[^/]+)/attendance-certificate/signing/$",
+        SigningView.as_view(),
+        name="organizer.signing",
+    ),
+    re_path(
+        r"^control/organizer/(?P<organizer>[^/]+)/attendance-certificate/signing/certificate\.pem$",
+        SigningCertificateDownloadView.as_view(),
+        name="organizer.signing.certificate",
     ),
     re_path(
         r"^control/event/(?P<organizer>[^/]+)/(?P<event>[^/]+)/sendmail/attendance-certificates/$",

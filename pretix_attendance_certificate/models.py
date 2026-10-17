@@ -98,6 +98,75 @@ class AttendanceCertificateLayout(LoggedModel):
         return cls.objects.filter(Q(event=event) | Q(organizer=event.organizer))
 
 
+class TimestampMode(models.TextChoices):
+    OFF = "off", _("Off")
+    OPTIONAL = "optional", _("On, if possible (sign without if unreachable)")
+    REQUIRED = "required", _("On, required (fail if unreachable)")
+
+
+class OrganizerSigningCertificate(models.Model):
+    """The organizer-wide certificate used to digitally sign every certificate
+    of attendance of the organizer's events (PAdES, see signing.py).
+
+    The private key is stored unencrypted, like other secrets pretix keeps for
+    an organizer (e.g. SMTP passwords). Access is limited to organizer admins
+    and the key never leaves the server."""
+
+    organizer = models.OneToOneField(
+        "pretixbase.Organizer",
+        on_delete=models.CASCADE,
+        related_name="attendance_certificate_signing",
+    )
+    certificate_pem = models.TextField()
+    private_key_pem = models.TextField()
+    # Further certificates of the chain (intermediate/root CA) from an imported
+    # .p12, PEM concatenated. Embedded into every signature.
+    chain_pem = models.TextField(blank=True, default="")
+    enabled = models.BooleanField(
+        default=True,
+        verbose_name=_("Sign certificates of attendance"),
+        help_text=_(
+            "If enabled, every certificate of attendance of this organizer is "
+            "digitally signed with this certificate."
+        ),
+    )
+    reason = models.CharField(
+        max_length=190,
+        blank=True,
+        default="Certificate of attendance",
+        verbose_name=_("Reason"),
+        help_text=_("Stored in the signature, shown by PDF readers."),
+    )
+    timestamp_mode = models.CharField(
+        max_length=16,
+        choices=TimestampMode.choices,
+        default=TimestampMode.OFF,
+        verbose_name=_("Trusted timestamp"),
+        help_text=_(
+            "A timestamp from an independent time stamping authority (RFC 3161) "
+            "proves when a certificate was signed and keeps the signature "
+            "verifiable after your certificate expires. If the authority is "
+            "unreachable, \"if possible\" signs without a timestamp and logs a "
+            "warning, \"required\" refuses to create the certificate (e.g. "
+            "the mail run stops)."
+        ),
+    )
+    timestamp_url = models.URLField(
+        max_length=255,
+        blank=True,
+        verbose_name=_("Timestamp server URL"),
+        help_text=_(
+            "Address of the time stamping authority, e.g. "
+            "http://timestamp.digicert.com or http://timestamp.sectigo.com. "
+            "Only a hash of the signature is sent, never the document."
+        ),
+    )
+    created = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return "Signing certificate of {}".format(self.organizer_id)
+
+
 class LayoutActivation(models.Model):
     """Per-event settings of a template.
 

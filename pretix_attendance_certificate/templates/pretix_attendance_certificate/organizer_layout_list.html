@@ -14,6 +14,11 @@
         <span class="fa fa-plus"></span>
         {% trans "Create a new template" %}
     </a>
+    <a href="{% url "plugins:pretix_attendance_certificate:organizer.signing" organizer=request.organizer.slug %}"
+            class="btn btn-default">
+        <span class="fa fa-certificate"></span>
+        {% trans "Digital signature" %}
+    </a>
     <table class="table table-condensed table-hover">
         <thead>
         <tr>

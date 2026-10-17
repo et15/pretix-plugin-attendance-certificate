@@ -13,6 +13,7 @@ from pretix_attendance_certificate.models import (
 from reportlab.pdfgen import canvas
 from reportlab.lib import pagesizes
 from django.core.files.base import ContentFile
+from pretix_attendance_certificate.signing import sign_pdf, signing_for
 
 
 def _renderer(event, layout):
@@ -57,4 +58,11 @@ def render_certificate(position, event, layout=None):
 
     page.save()
     buffer = renderer.render_background(buffer, _("Certificate of attendance"))
-    return ContentFile(buffer.read(), name="certificate_of_attendance.pdf")
+    content = buffer.read()
+
+    # Never hand out an unsigned PDF while signing is switched on: if this
+    # raises, the caller fails visibly instead of sending an unsigned file.
+    signing = signing_for(event.organizer)
+    if signing is not None:
+        content = sign_pdf(content, signing)
+    return ContentFile(content, name="certificate_of_attendance.pdf")

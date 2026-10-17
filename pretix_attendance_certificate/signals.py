@@ -307,5 +307,11 @@ def pretix_logentry_display(sender, logentry, **kwargs):
             checkin_list=logentry.parsed_data.get("checkin_list"),
         )
 
+    if (
+        logentry.action_type
+        == "pretix.plugins.pretix_attendance_certificate.signing.changed"
+    ):
+        return _("The signing certificate for certificates of attendance was changed.")
+
     if logentry.action_type == "pretix_attendance_certificate.sendmail.sent":
         return _("The certificate of attendance has been sent out to all attendees.")

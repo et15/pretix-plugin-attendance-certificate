@@ -18,7 +18,10 @@ spaces), block quotes (`> text`), code, horizontal rules (`---`), `**bold**`,
 https, mailto and tel). Images are shown as their alt text, HTML is printed as
 typed. The formatting comes from the template text only: placeholders such as
 `{attendee_name}` are replaced afterwards and never interpreted as Markdown. The
-editor canvas still shows the raw text, the preview PDF shows the result.
+editor canvas still shows the raw text, the preview PDF shows the result. Code
+is set in a monospace font provided by pretix (a font family with "Mono",
+"Courier" or "Code" in its name, e.g. from a font plugin) if there is one, and in
+the font of the field otherwise.
 
 ## Digital signature
 

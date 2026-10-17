@@ -18,7 +18,11 @@ from contextlib import nullcontext
 from itertools import product
 from i18nfield.strings import LazyI18nString
 from reportlab.pdfbase import pdfmetrics
-from pretix_attendance_certificate.markdown_text import to_blocks, to_markup
+from pretix_attendance_certificate.markdown_text import (
+    find_code_font,
+    to_blocks,
+    to_markup,
+)
 
 _HEADING_SIZES = {1: 1.6, 2: 1.4, 3: 1.2, 4: 1.1, 5: 1.0, 6: 1.0}
 
@@ -88,6 +92,7 @@ class MarkdownRenderer(Renderer):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._register_font_families()
+        self._code_font = find_code_font(self.event_fonts)
 
     def _register_font_families(self):
         # pretix registers "Open Sans", "Open Sans B", "Open Sans I", ... as
@@ -176,7 +181,7 @@ class MarkdownRenderer(Renderer):
         text = super()._get_text_content(op, order, o, inner)
         if o.get("_markdown") and not inner:
             # Already escaped and tagged, so pretix must not escape it again.
-            return to_markup(text)
+            return to_markup(text, self._code_font)
         return text
 
 

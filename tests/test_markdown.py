@@ -4,7 +4,12 @@ from io import BytesIO
 import pytest
 from django_scopes import scopes_disabled
 
-from pretix_attendance_certificate.markdown_text import _mark, to_blocks, to_markup
+from pretix_attendance_certificate.markdown_text import (
+    _mark,
+    find_code_font,
+    to_blocks,
+    to_markup,
+)
 from pretix_attendance_certificate.render import render_certificate
 
 
@@ -13,7 +18,18 @@ def _markup(text):
 
 
 def test_inline_formatting():
-    assert _markup("**b** *i* `c`") == ['<b>b</b> <i>i</i> <font face="Courier">c</font>']
+    assert _markup("**b** *i* `c`") == ["<b>b</b> <i>i</i> c"]
+
+
+def test_code_uses_the_monospace_font_if_there_is_one():
+    text = to_blocks("`c`")[0].text
+    assert to_markup(text, "Fira Mono") == '<font face="Fira Mono">c</font>'
+
+
+def test_find_code_font():
+    assert find_code_font(["Open Sans", "Fira Mono", "Other"]) == "Fira Mono"
+    assert find_code_font(["Open Sans", "Fira-Mono", "Courier Prime"]) == "Courier Prime"
+    assert find_code_font(["Open Sans", "Other"]) is None
 
 
 def test_blank_line_separates_paragraphs_and_newline_stays():

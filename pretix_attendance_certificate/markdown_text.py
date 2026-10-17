@@ -35,8 +35,8 @@ _MARKER = re.compile(
 _TAGS = {
     "b": ("<b>", "</b>"),
     "i": ("<i>", "</i>"),
-    "c": ('<font face="Courier">', "</font>"),
 }
+_MONO_FONT = re.compile(r"mono|courier|code", re.IGNORECASE)
 _ALLOWED_SCHEMES = {"http", "https", "mailto", "tel"}
 _BLOCK_TAGS = {"p", "ul", "ol", "li", "blockquote", "pre", "hr"} | {
     "h%d" % n for n in range(1, 7)
@@ -168,10 +168,25 @@ def _is_safe_url(url):
     )
 
 
-def to_markup(text):
+def find_code_font(fonts):
+    """The monospace font among the font families pretix offers, if any. Names
+    with a hyphen are skipped: pretix puts a hairspace after every hyphen."""
+    for font in fonts:
+        if _MONO_FONT.search(font) and "-" not in font:
+            return font
+    return None
+
+
+def to_markup(text, code_font=None):
     """Text that may contain markers (and attendee data) -> safe reportlab
     markup. Everything is escaped; only well-nested markers become tags,
-    otherwise the text is shown without any formatting."""
+    otherwise the text is shown without any formatting. Code is set in
+    code_font, or in the font of the field if there is none."""
+    tags = dict(_TAGS)
+    if code_font:
+        tags["c"] = ('<font face="{}">'.format(html.escape(code_font)), "</font>")
+    else:
+        tags["c"] = ("", "")
     escaped = str(conditional_escape(text))
     out, stack, pos = [], [], 0
     for match in _MARKER.finditer(escaped):
@@ -192,8 +207,8 @@ def to_markup(text):
             else:
                 stack.append(("/a", ""))
         else:
-            out.append(_TAGS[code][0])
-            stack.append(("/" + code, _TAGS[code][1]))
+            out.append(tags[code][0])
+            stack.append(("/" + code, tags[code][1]))
     out.append(escaped[pos:])
     if stack:
         return mark_safe(_MARKER.sub("", escaped))

@@ -14,7 +14,7 @@ The free text of the text fields in the layout editor ("Other…" and "Other…
 (multilingual)") is Markdown: paragraphs (separated by a blank line), headings
 (`# Title`), bullet (`- item`) and numbered (`1. item`) lists with nesting (four
 spaces), block quotes (`> text`), code, horizontal rules (`---`), `**bold**`,
-`*italic*`, `` `code` `` and links (`[text](https://example.org)`; only http,
+`*italic*`, `++underline++`, `` `code` `` and links (`[text](https://example.org)`; only http,
 https, mailto and tel). Images are shown as their alt text, HTML is printed as
 typed. The formatting comes from the template text only: placeholders such as
 `{attendee_name}` are replaced afterwards and never interpreted as Markdown. The

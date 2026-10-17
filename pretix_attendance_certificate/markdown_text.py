@@ -9,7 +9,8 @@ everything and turns well-nested markers into reportlab tags. An attendee called
 "**x** <b>y</b>" is therefore printed literally.
 
 Supported: paragraphs, headings, (nested) bullet and numbered lists, block
-quotes, code, rules, **bold**, *italic*, `code` and [links](https://example.org).
+quotes, code, rules, **bold**, *italic*, ++underline++, `code` and
+[links](https://example.org).
 Images are reduced to their alt text, raw HTML is not interpreted.
 """
 
@@ -22,6 +23,8 @@ from urllib.parse import urlparse
 import markdown
 from django.utils.html import conditional_escape
 from django.utils.safestring import mark_safe
+from markdown.extensions import Extension
+from markdown.inlinepatterns import SimpleTagInlineProcessor
 from markdown.treeprocessors import Treeprocessor
 
 _PLACEHOLDER = re.compile(r"\{[-a-zA-Z0-9:_]+\}")
@@ -30,12 +33,15 @@ _HELD = re.compile("(\\d+)")
 # The markers carry a random per-process nonce, so attendee data can't forge them.
 _OPEN, _CLOSE = "" + secrets.token_hex(6), ""
 _MARKER = re.compile(
-    "{}(?P<code>/?[bic]|/a|a(?P<href>[^{}]*)){}".format(_OPEN, _CLOSE, _CLOSE)
+    "{}(?P<code>/?[biuc]|/a|a(?P<href>[^{}]*)){}".format(_OPEN, _CLOSE, _CLOSE)
 )
 _TAGS = {
     "b": ("<b>", "</b>"),
     "i": ("<i>", "</i>"),
+    "u": ("<u>", "</u>"),
 }
+# ++underline++, but not "C++ and C++"
+_UNDERLINE = r"(?<![\w+])(\+\+)(?=\S)(.+?)(?<=\S)\+\+(?![\w+])"
 _MONO_FONT = re.compile(r"mono|courier|code", re.IGNORECASE)
 _ALLOWED_SCHEMES = {"http", "https", "mailto", "tel"}
 _BLOCK_TAGS = {"p", "ul", "ol", "li", "blockquote", "pre", "hr"} | {
@@ -66,8 +72,15 @@ class _Capture(Treeprocessor):
         self.root = root
 
 
+class _UnderlineExtension(Extension):
+    def extendMarkdown(self, md):
+        md.inlinePatterns.register(
+            SimpleTagInlineProcessor(_UNDERLINE, "u"), "underline", 75
+        )
+
+
 def _parse(source):
-    md = markdown.Markdown(extensions=["sane_lists"])
+    md = markdown.Markdown(extensions=["sane_lists", _UnderlineExtension()])
     md.preprocessors.deregister("html_block")
     for name in ("html", "entity", "automail"):
         md.inlinePatterns.deregister(name)
@@ -97,6 +110,8 @@ def _inline_element(el):
         return _mark("b") + inner + _mark("/b")
     if el.tag == "em":
         return _mark("i") + inner + _mark("/i")
+    if el.tag == "u":
+        return _mark("u") + inner + _mark("/u")
     if el.tag == "code":
         return _mark("c") + inner + _mark("/c")
     if el.tag == "a":

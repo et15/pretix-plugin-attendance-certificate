@@ -21,6 +21,19 @@ def test_inline_formatting():
     assert _markup("**b** *i* `c`") == ["<b>b</b> <i>i</i> c"]
 
 
+def test_underline():
+    assert _markup("++u++ and **++both++**") == ["<u>u</u> and <b><u>both</u></b>"]
+
+
+def test_plus_signs_are_not_underline():
+    assert _markup("C++ and C++, 1 ++ 2 ++ 3") == ["C++ and C++, 1 ++ 2 ++ 3"]
+
+
+def test_underline_markers_in_substituted_data_are_literal():
+    text = to_blocks("{attendee_name}")[0].text
+    assert to_markup(text.replace("{attendee_name}", "++x++")) == "++x++"
+
+
 def test_code_uses_the_monospace_font_if_there_is_one():
     text = to_blocks("`c`")[0].text
     assert to_markup(text, "Fira Mono") == '<font face="Fira Mono">c</font>'

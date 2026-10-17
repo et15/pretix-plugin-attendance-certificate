@@ -8,6 +8,18 @@ Used by https://pycon.it
 
 pretix 2026.7.0 or newer and Python 3.11 or newer.
 
+## Formatting in the certificate text
+
+The free text of the text fields in the layout editor ("Other…" and "Other…
+(multilingual)") is Markdown: paragraphs (separated by a blank line), headings
+(`# Title`), bullet (`- item`) and numbered (`1. item`) lists with nesting (four
+spaces), block quotes (`> text`), code, horizontal rules (`---`), `**bold**`,
+`*italic*`, `` `code` `` and links (`[text](https://example.org)`; only http,
+https, mailto and tel). Images are shown as their alt text, HTML is printed as
+typed. The formatting comes from the template text only: placeholders such as
+`{attendee_name}` are replaced afterwards and never interpreted as Markdown. The
+editor canvas still shows the raw text, the preview PDF shows the result.
+
 ## Digital signature
 
 Organizers can sign all certificates of attendance with a certificate of their

@@ -7,6 +7,7 @@ from django.core.files.storage import default_storage
 from reportlab.lib import pagesizes
 from io import BytesIO
 from pretix.base.pdf import Renderer
+from pretix_attendance_certificate.render import MarkdownRenderer
 from pretix.base.models import CachedFile, OrderPosition
 import json
 from django.utils.translation import gettext_lazy as _
@@ -114,7 +115,7 @@ class EditorView(BaseEditorView):
                 ),
                 "rb",
             )
-        r = Renderer(
+        r = MarkdownRenderer(
             self.request.event,
             override_layout or self.get_current_layout(),
             bgf,

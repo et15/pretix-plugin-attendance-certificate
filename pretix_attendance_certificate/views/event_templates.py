@@ -9,6 +9,7 @@ from pretix.control.permissions import EventPermissionRequiredMixin
 from pretix.helpers.compat import CompatDeleteView
 
 from pretix_attendance_certificate.forms import OrganizerLayoutForm
+from pretix_attendance_certificate.views.presale import SELF_SERVICE_SETTING
 from pretix_attendance_certificate.models import (
     AttendanceCertificateLayout,
     LayoutActivation,
@@ -59,6 +60,9 @@ class EventLayoutListView(EventPermissionRequiredMixin, TemplateView):
             for layout in available_layouts(event)
         ]
         ctx["checkin_lists"] = event.checkin_lists.all()
+        ctx["self_service"] = event.settings.get(
+            SELF_SERVICE_SETTING, as_type=bool, default=False
+        )
         ctx["can_edit_organizer_layouts"] = self.request.user.has_organizer_permission(
             event.organizer, "can_change_organizer_settings", request=self.request
         )
@@ -121,7 +125,8 @@ class EventLayoutToggleView(EventPermissionRequiredMixin, TemplateView):
 
 
 class EventLayoutAssignView(EventPermissionRequiredMixin, TemplateView):
-    """Saves, for every available template, the check-in list it is tied to."""
+    """Saves, for every available template, the check-in list it is tied to,
+    plus the self-service switch."""
 
     permission = ("can_change_event_settings", "can_view_orders")
 
@@ -139,6 +144,7 @@ class EventLayoutAssignView(EventPermissionRequiredMixin, TemplateView):
                 event=event,
                 defaults={"checkin_list": lists.get(raw_list)},
             )
+        event.settings.set(SELF_SERVICE_SETTING, bool(request.POST.get("self_service")))
         messages.success(request, _("Your changes have been saved."))
         return redirect(self._back())
 

@@ -16,6 +16,7 @@ from .views.organizer import (
     OrganizerLayoutUpdateView,
 )
 from .views.positions import DownloadCertificateView, SendCertificateView
+from .views.presale import SelfServiceDownloadView
 
 urlpatterns = [
     re_path(
@@ -87,5 +88,14 @@ urlpatterns = [
         r"^control/event/(?P<organizer>[^/]+)/(?P<event>[^/]+)/attendance-certificate/position/(?P<position>\d+)/send$",
         SendCertificateView.as_view(),
         name="position.send",
+    ),
+]
+
+# Customer-facing (presale) URLs.
+event_patterns = [
+    re_path(
+        r"^attendance-certificate/(?P<order>[^/]+)/(?P<secret>[A-Za-z0-9]+)/(?P<position>\d+)/(?P<layout>\d+)/download$",
+        SelfServiceDownloadView.as_view(),
+        name="presale.download",
     ),
 ]

@@ -42,6 +42,15 @@
             {% endfor %}
             </tbody>
         </table>
+        <div class="checkbox">
+            <label>
+                <input type="checkbox" name="self_service" {% if self_service %}checked{% endif %}>
+                {% trans "Let attendees download their certificate from their order page" %}
+            </label>
+            <p class="help-block">
+                {% trans "Only for paid orders, after the event is over, and only for attendees who were checked in on any check-in list. Templates tied to a check-in list additionally need a check-in on that list." %}
+            </p>
+        </div>
         {% if "can_change_event_settings" in request.eventpermset %}
             <button type="submit" class="btn btn-primary">{% trans "Save" %}</button>
         {% endif %}

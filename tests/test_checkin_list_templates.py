@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 import pytest
 from django.contrib.messages import get_messages
 from django.core import mail as djmail
@@ -7,11 +9,13 @@ from django_scopes import scopes_disabled
 
 from pretix.base.models import Checkin, CheckinList, Event, Order, OrderPosition
 from pretix.base.signals import event_copy_data
+from pretix.multidomain.urlreverse import eventreverse
 
 from pretix_attendance_certificate.models import (
     LayoutActivation,
     certificate_options,
 )
+from pretix_attendance_certificate.views.presale import SELF_SERVICE_SETTING
 
 
 def _new_event(organizer, slug="copy"):
@@ -188,7 +192,7 @@ def _assign_url(event):
 
 
 @pytest.mark.django_db
-def test_assign_checkin_list(
+def test_assign_checkin_list_and_toggle_self_service(
     logged_in_client, event, layout, organizer_layout, passed_list
 ):
     with scopes_disabled():
@@ -198,6 +202,7 @@ def test_assign_checkin_list(
         {
             "list_%d" % organizer_layout.pk: passed_list.pk,
             "list_%d" % layout.pk: "",
+            "self_service": "on",
         },
     )
     assert response.status_code == 302
@@ -207,14 +212,17 @@ def test_assign_checkin_list(
             == passed_list
         )
         assert LayoutActivation.objects.get(layout=layout, event=event).checkin_list is None
+    assert event.settings.get(SELF_SERVICE_SETTING, as_type=bool)
 
-    # The assignment can be cleared again.
+    # Untick -> switched off again and the assignment can be cleared.
     logged_in_client.post(_assign_url(event), {"list_%d" % organizer_layout.pk: ""})
     with scopes_disabled():
         assert (
             LayoutActivation.objects.get(layout=organizer_layout, event=event).checkin_list
             is None
         )
+    event.settings.flush()
+    assert not event.settings.get(SELF_SERVICE_SETTING, as_type=bool)
 
 
 @pytest.mark.django_db
@@ -337,11 +345,182 @@ def test_bulk_send_single_tied_template_is_restricted(
     assert [m.to for m in djmail.outbox] == [["attendee@dummy.test"]]
 
 
+# --- customer self-service -------------------------------------------------
+
+
+def _self_service_url(event, order, pos, layout, secret=None):
+    return eventreverse(
+        event,
+        "plugins:pretix_attendance_certificate:presale.download",
+        kwargs={
+            "order": order.code,
+            "secret": secret or order.secret,
+            "position": pos.positionid,
+            "layout": layout.pk,
+        },
+    )
+
+
+def _order_page(event, order):
+    return eventreverse(
+        event, "presale:event.order", kwargs={"order": order.code, "secret": order.secret}
+    )
+
+
+@pytest.fixture
+def self_service(event, pos):
+    """Self-service on, the event over and the attendee checked in somewhere:
+    the baseline in which a download is allowed."""
+    event.settings.set(SELF_SERVICE_SETTING, True)
+    event.date_from = now() - timedelta(days=3)
+    event.date_to = now() - timedelta(days=2)
+    event.save()
+    attendance = CheckinList.objects.create(event=event, name="Attendance")
+    _check_in(pos, attendance)
+    return attendance
+
+
+@pytest.mark.django_db
+def test_self_service_off_by_default(client, event, order, pos, layout):
+    with scopes_disabled():
+        attendance = CheckinList.objects.create(event=event, name="Attendance")
+        _check_in(pos, attendance)
+    event.date_from = now() - timedelta(days=3)
+    event.date_to = now() - timedelta(days=2)
+    event.save()
+    assert client.get(_self_service_url(event, order, pos, layout)).status_code == 404
+    assert "Download certificate of attendance" not in client.get(_order_page(event, order)).content.decode()
+
+
+@pytest.mark.django_db
+def test_self_service_download(client, event, order, pos, layout, self_service):
+    response = client.get(_self_service_url(event, order, pos, layout))
+    assert response.status_code == 200
+    assert response["Content-Type"] == "application/pdf"
+    assert b"".join(response.streaming_content).startswith(b"%PDF")
+
+
+@pytest.mark.django_db
+def test_self_service_link_on_order_page(client, event, order, pos, layout, self_service):
+    content = client.get(_order_page(event, order)).content.decode()
+    assert "Download certificate of attendance" in content
+    assert _self_service_url(event, order, pos, layout) in content
+
+
+@pytest.mark.django_db
+def test_self_service_link_on_ticket_page_uses_position_secret(
+    client, event, order, pos, layout, self_service
+):
+    url = eventreverse(
+        event,
+        "presale:event.order.position",
+        kwargs={"order": order.code, "position": pos.positionid, "secret": pos.web_secret},
+    )
+    content = client.get(url).content.decode()
+    link = _self_service_url(event, order, pos, layout, secret=pos.web_secret)
+    assert link in content
+    assert client.get(link).status_code == 200
+
+
+@pytest.mark.django_db
+def test_self_service_wrong_secret(client, event, order, pos, layout, self_service):
+    response = client.get(_self_service_url(event, order, pos, layout, secret="wrongsecret"))
+    assert response.status_code == 404
+
+
+@pytest.mark.django_db
+def test_self_service_requires_paid_order(client, event, order, pos, layout, self_service):
+    with scopes_disabled():
+        order.status = Order.STATUS_PENDING
+        order.save()
+    assert client.get(_self_service_url(event, order, pos, layout)).status_code == 404
+
+
+@pytest.mark.django_db
+def test_self_service_only_for_eligible_templates(
+    client, event, order, pos, layout, passed_layout, passed_list, self_service
+):
+    blocked = _self_service_url(event, order, pos, passed_layout)
+    assert client.get(blocked).status_code == 404
+    content = client.get(_order_page(event, order)).content.decode()
+    assert blocked not in content
+    assert _self_service_url(event, order, pos, layout) in content
+
+    with scopes_disabled():
+        _check_in(pos, passed_list)
+    assert client.get(blocked).status_code == 200
+    assert blocked in client.get(_order_page(event, order)).content.decode()
+
+
+@pytest.mark.django_db
+def test_self_service_requires_the_event_to_be_over(
+    client, event, order, pos, layout, self_service
+):
+    event.date_to = now() + timedelta(days=1)
+    event.save()
+    assert client.get(_self_service_url(event, order, pos, layout)).status_code == 404
+    assert "Download certificate" not in client.get(_order_page(event, order)).content.decode()
+    event.date_to = now() - timedelta(hours=1)
+    event.save()
+    assert client.get(_self_service_url(event, order, pos, layout)).status_code == 200
+
+
+@pytest.mark.django_db
+def test_self_service_without_end_date_unlocks_after_the_start_day(
+    client, event, order, pos, layout, self_service
+):
+    event.date_to = None
+    event.date_from = now()  # starts today: not over until the day is
+    event.save()
+    assert client.get(_self_service_url(event, order, pos, layout)).status_code == 404
+    event.date_from = now() - timedelta(days=2)
+    event.save()
+    assert client.get(_self_service_url(event, order, pos, layout)).status_code == 200
+
+
+@pytest.mark.django_db
+def test_self_service_requires_the_attendee_to_have_been_checked_in(
+    client, event, order, pos, pos_absent, layout, self_service
+):
+    # pos was checked in by the fixture, pos_absent was not.
+    assert client.get(_self_service_url(event, order, pos, layout)).status_code == 200
+    assert client.get(_self_service_url(event, order, pos_absent, layout)).status_code == 404
+    content = client.get(_order_page(event, order)).content.decode()
+    assert _self_service_url(event, order, pos_absent, layout) not in content
+
+
+@pytest.mark.django_db
+def test_self_service_ignores_failed_checkins(
+    client, event, order, pos_absent, layout, self_service
+):
+    with scopes_disabled():
+        _check_in(pos_absent, self_service, successful=False)
+    assert client.get(_self_service_url(event, order, pos_absent, layout)).status_code == 404
+
+
+@pytest.mark.django_db
+def test_self_service_has_no_effect_on_admin_download(
+    logged_in_client, event, order, pos_absent, layout
+):
+    # Admins can always issue a certificate; the presence rule is for customers.
+    assert logged_in_client.get(_download(event, pos_absent)).status_code == 200
+
+
+@pytest.mark.django_db
+def test_self_service_hidden_when_not_eligible_for_anything(
+    client, event, order, pos, passed_layout, self_service
+):
+    content = client.get(_order_page(event, order)).content.decode()
+    assert "Certificate of attendance" not in content
+
+
 # --- event copy ------------------------------------------------------------
 
 
 @pytest.mark.django_db
-def test_event_copy_keeps_checkin_list_assignment(event, passed_layout, passed_list):
+def test_event_copy_keeps_checkin_list_assignment_and_self_service(
+    event, passed_layout, passed_list, self_service
+):
     with scopes_disabled():
         new_event = _new_event(event.organizer)
         # pretix copies the check-in lists itself before this signal fires.
@@ -351,6 +530,7 @@ def test_event_copy_keeps_checkin_list_assignment(event, passed_layout, passed_l
         copied = LayoutActivation.objects.get(layout=passed_layout, event=new_event)
         assert copied.checkin_list.event == new_event
         assert copied.checkin_list.name == "Passed the course"
+    assert new_event.settings.get(SELF_SERVICE_SETTING, as_type=bool)
 
 
 # --- deleting a tied check-in list deactivates the template ----------------
@@ -418,7 +598,7 @@ def test_deleting_other_lists_changes_nothing(
 
 @pytest.mark.django_db
 def test_deactivated_template_is_blocked_everywhere(
-    logged_in_client, event, order, pos, layout, passed_list
+    logged_in_client, client, event, order, pos, layout, passed_list, self_service
 ):
     with scopes_disabled():
         LayoutActivation.objects.create(layout=layout, event=event, checkin_list=passed_list)
@@ -428,6 +608,7 @@ def test_deactivated_template_is_blocked_everywhere(
     assert response.status_code == 302 and any(
         "not available" in m for m in _messages(response)
     )
+    assert client.get(_self_service_url(event, order, pos, layout)).status_code == 404
 
 
 @pytest.mark.django_db

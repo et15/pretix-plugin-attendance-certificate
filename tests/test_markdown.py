@@ -172,3 +172,20 @@ def test_attendee_data_is_printed_literally(event, pos, layout):
 def test_plain_text_is_unchanged(event, pos, layout):
     page = _render(layout, pos, event, [_field("Just text\nsecond line", 250)])
     assert "Just text\nsecond line" in page.extract_text()
+
+
+@pytest.mark.django_db
+def test_list_bullet_is_on_the_first_line_of_a_multiline_item(event, pos, layout):
+    page = _render(
+        layout, pos, event,
+        [_field("- Entwicklung der Jugendarbeit im Verein", 250, width="40")],
+    )
+    lines = []
+    page.extract_text(
+        visitor_text=lambda text, cm, tm, font, size: lines.append((text.strip(), tm[5] + cm[5]))
+        if text.strip() else None
+    )
+    ys = dict(lines)
+    assert len({y for _, y in lines}) > 1  # the item wraps
+    assert ys["•"] == max(y for _, y in lines)
+    assert ys["•"] == ys["Entwicklung"]

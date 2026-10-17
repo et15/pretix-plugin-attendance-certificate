@@ -82,7 +82,10 @@ class _Stack:
                 continue
             e.paragraph.drawOn(canvas, x + e.offset, cursor)
             if e.bullet is not None:
-                e.bullet.drawOn(canvas, x + e.bullet_offset, cursor)
+                # on the first line of the item, not the last
+                e.bullet.drawOn(
+                    canvas, x + e.bullet_offset, cursor + e.height - e.bullet.height
+                )
 
 
 class MarkdownRenderer(Renderer):

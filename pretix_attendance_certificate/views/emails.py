@@ -23,7 +23,14 @@ class CertificateEmailForm(BaseMailForm):
         # Only ask which template to use when there actually is a choice -
         # events with a single available template keep working unchanged.
         candidates = available_layouts(self.event)
-        if candidates.count() > 1:
+        if candidates.count() == 1:
+            # Nothing to choose, so start from the template's own email text
+            # instead of offering a button for it. Don't override a resend's
+            # text copied from the email history (?from_log=).
+            layout = candidates.first()
+            self.initial.setdefault("subject", layout.mail_subject)
+            self.initial.setdefault("message", layout.mail_text)
+        elif candidates.count() > 1:
             self.fields["layout"] = forms.ModelChoiceField(
                 queryset=candidates,
                 label=_("Template"),
